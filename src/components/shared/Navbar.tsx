@@ -23,7 +23,6 @@ import {
   MessageSquare,
   LayoutDashboard,
   FileText,
-  ArrowRight,
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 
@@ -37,16 +36,7 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
   const [user, setUser] = useState<User | null>(initialUser || null)
   const [role, setRole] = useState<string | null>(initialRole || null)
   const [isOpen, setIsOpen] = useState(false)
-  const [scrolled, setScrolled] = useState(false)
   const supabase = createClient()
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 10)
-    }
-    window.addEventListener('scroll', handleScroll)
-    return () => window.removeEventListener('scroll', handleScroll)
-  }, [])
 
   useEffect(() => {
     const getUser = async () => {
@@ -109,53 +99,66 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
   const gigsLink = role === 'employer' ? '/employer/gigs' : null
 
   return (
-    <nav
-      className={`sticky top-0 z-50 w-full transition-all duration-300 ${
-        scrolled
-          ? 'bg-background/80 backdrop-blur-md border-b border-border shadow-subtle'
-          : 'bg-transparent'
-      }`}
-    >
-      <div className="container flex h-16 items-center justify-between">
+    <nav className="fixed top-0 left-0 right-0 z-50 flex justify-center pt-4 px-4">
+      {/* Pill-shaped navbar container */}
+      <div className="flex items-center justify-between w-full max-w-4xl h-14 px-6 rounded-full bg-white/70 backdrop-blur-xl border border-white/20 shadow-lg shadow-black/5">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 group">
-          <span className="text-2xl font-display tracking-tight">
-            SideQuest
+        <Link href="/" className="flex items-center">
+          <span className="text-xl font-logo">
+            <span className="italic">Side</span>quest
           </span>
         </Link>
 
-        {/* Desktop Navigation */}
+        {/* Desktop Navigation - Center */}
         <div className="hidden md:flex md:items-center md:gap-8">
           <Link
             href="/gigs"
-            className={`text-[15px] font-medium transition-colors link-underline ${
+            className={`text-sm font-medium transition-colors ${
               pathname === '/gigs' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             Browse Gigs
           </Link>
+          <Link
+            href="/about"
+            className={`text-sm font-medium transition-colors ${
+              pathname === '/about' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            About
+          </Link>
           {!user && (
             <Link
               href="/#how-it-works"
-              className="text-[15px] font-medium text-muted-foreground transition-colors hover:text-foreground link-underline"
+              className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               How It Works
             </Link>
           )}
+          {user && (
+            <Link
+              href={dashboardLink}
+              className={`text-sm font-medium transition-colors ${
+                pathname.includes('/dashboard') ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Dashboard
+            </Link>
+          )}
         </div>
 
-        {/* Desktop Auth */}
-        <div className="hidden md:flex md:items-center md:gap-4">
+        {/* Desktop Auth - Right */}
+        <div className="hidden md:flex md:items-center md:gap-3">
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                  <Avatar className="h-10 w-10 border-2 border-border">
+                <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0">
+                  <Avatar className="h-9 w-9 border border-border">
                     <AvatarImage
                       src={user.user_metadata?.avatar_url}
                       alt={user.user_metadata?.full_name}
                     />
-                    <AvatarFallback className="bg-secondary text-foreground font-medium">
+                    <AvatarFallback className="bg-secondary text-foreground text-sm font-medium">
                       {getInitials(user.user_metadata?.full_name || user.email)}
                     </AvatarFallback>
                   </Avatar>
@@ -228,22 +231,24 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
             <>
               <Link
                 href="/?login=true"
-                className="text-[15px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
               >
-                Sign In
+                Login
               </Link>
-              <Link href="/?signup=true" className="btn-primary">
-                Get Started
-                <ArrowRight className="h-4 w-4" />
+              <Link
+                href="/?signup=true"
+                className="inline-flex items-center justify-center h-9 px-5 text-sm font-medium text-white bg-foreground rounded-full hover:bg-foreground/90 transition-colors"
+              >
+                Get started
               </Link>
             </>
           )}
         </div>
 
-        {/* Mobile Menu */}
+        {/* Mobile Menu Button */}
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
           <SheetTrigger asChild className="md:hidden">
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" className="h-9 w-9">
               <Menu className="h-5 w-5" />
             </Button>
           </SheetTrigger>
@@ -251,30 +256,37 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
             <div className="flex flex-col gap-6 py-8">
               <Link
                 href="/gigs"
-                className="text-xl font-display hover:text-muted-foreground transition-colors"
+                className="text-xl font-medium hover:text-muted-foreground transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 Browse Gigs
+              </Link>
+              <Link
+                href="/about"
+                className="text-xl font-medium hover:text-muted-foreground transition-colors"
+                onClick={() => setIsOpen(false)}
+              >
+                About
               </Link>
               {user ? (
                 <>
                   <Link
                     href={dashboardLink}
-                    className="text-xl font-display hover:text-muted-foreground transition-colors"
+                    className="text-xl font-medium hover:text-muted-foreground transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     Dashboard
                   </Link>
                   <Link
                     href={profileLink}
-                    className="text-xl font-display hover:text-muted-foreground transition-colors"
+                    className="text-xl font-medium hover:text-muted-foreground transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     Profile
                   </Link>
                   <Link
                     href={messagesLink}
-                    className="text-xl font-display hover:text-muted-foreground transition-colors"
+                    className="text-xl font-medium hover:text-muted-foreground transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     Messages
@@ -300,15 +312,14 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
                     className="btn-secondary w-full text-center"
                     onClick={() => setIsOpen(false)}
                   >
-                    Sign In
+                    Login
                   </Link>
                   <Link
                     href="/?signup=true"
                     className="btn-primary w-full justify-center"
                     onClick={() => setIsOpen(false)}
                   >
-                    Get Started
-                    <ArrowRight className="h-4 w-4" />
+                    Get started
                   </Link>
                 </div>
               )}

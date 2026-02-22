@@ -8,7 +8,7 @@ interface HeroProps {
 
 export function Hero({ onGetStarted }: HeroProps) {
   return (
-    <section className="relative section-spacing overflow-hidden">
+    <section className="relative pt-32 pb-24 md:pt-40 md:pb-32 lg:pt-48 lg:pb-40 overflow-hidden">
       <div className="container">
         <div className="mx-auto max-w-4xl text-center">
           {/* Badge */}

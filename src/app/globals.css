@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 /* Cofounder-inspired Design System */
-/* Fonts: Inter for body, Instrument Serif for display headings */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&display=swap');
+/* Fonts: Inter for body, Instrument Serif for display headings, Playfair Display for logo */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Instrument+Serif:ital@0;1&family=Playfair+Display:ital,wght@0,400;0,500;1,400;1,500&display=swap');
 
 @layer base {
   :root {
@@ -42,6 +42,7 @@
     /* Custom properties */
     --font-display: 'Instrument Serif', Georgia, serif;
     --font-body: 'Inter', system-ui, sans-serif;
+    --font-logo: 'Playfair Display', Georgia, serif;
   }
 
   .dark {
@@ -95,6 +96,11 @@
   /* Display font for headings */
   .font-display {
     font-family: var(--font-display);
+  }
+
+  /* Logo font */
+  .font-logo {
+    font-family: var(--font-logo);
   }
 
   h1, h2, h3 {

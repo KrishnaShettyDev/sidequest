@@ -8,6 +8,7 @@ import { Footer } from '@/components/shared/Footer'
 import { Hero } from '@/components/landing/Hero'
 import { HowItWorks } from '@/components/landing/HowItWorks'
 import { Categories } from '@/components/landing/Categories'
+import { FAQ } from '@/components/landing/FAQ'
 import { AuthModal } from '@/components/auth/AuthModal'
 import { RoleSelector } from '@/components/auth/RoleSelector'
 import { ArrowRight } from 'lucide-react'
@@ -78,6 +79,7 @@ function HomeContent() {
         <Hero onGetStarted={handleGetStarted} />
         <HowItWorks />
         <Categories />
+        <FAQ />
 
         {/* CTA Section */}
         <section className="section-spacing-sm">

@@ -208,7 +208,7 @@ export default function StudentDashboard() {
     <div className="flex min-h-screen flex-col">
       <Navbar />
 
-      <main className="flex-1 bg-muted/30">
+      <main className="flex-1 bg-muted/30 pt-24">
         <div className="container py-8">
           {/* Welcome Header */}
           <div className="mb-8">

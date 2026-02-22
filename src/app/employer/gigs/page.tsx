@@ -161,7 +161,7 @@ export default function EmployerGigsPage() {
     <div className="flex min-h-screen flex-col">
       <Navbar />
 
-      <main className="flex-1 bg-muted/30">
+      <main className="flex-1 pt-24 bg-muted/30">
         <div className="container py-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
             <div>

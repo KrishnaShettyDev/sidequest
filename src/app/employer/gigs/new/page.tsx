@@ -183,7 +183,7 @@ export default function NewGigPage() {
     <div className="flex min-h-screen flex-col">
       <Navbar />
 
-      <main className="flex-1 bg-muted/30">
+      <main className="flex-1 pt-24 bg-muted/30">
         <div className="container py-8">
           {/* Header */}
           <div className="mb-8">

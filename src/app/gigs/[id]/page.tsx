@@ -233,7 +233,7 @@ export default function GigDetailPage() {
     <div className="flex min-h-screen flex-col">
       <Navbar />
 
-      <main className="flex-1">
+      <main className="flex-1 pt-24">
         {/* Cover Photo */}
         {gig.employer?.cover_photo_url && (
           <div className="h-48 md:h-64 bg-muted overflow-hidden">

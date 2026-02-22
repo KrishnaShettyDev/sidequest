@@ -122,8 +122,8 @@ export default function GigsPage() {
     <div className="flex min-h-screen flex-col">
       <Navbar />
 
-      <main className="flex-1 bg-background">
-        <div className="container py-12">
+      <main className="flex-1 bg-background pt-24">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-12">
           {/* Header */}
           <div className="mb-10">
             <h1 className="text-title mb-3">Browse Gigs</h1>
