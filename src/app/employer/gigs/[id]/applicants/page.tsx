@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Navbar } from '@/components/shared/Navbar'
-import { Footer } from '@/components/shared/Footer'
+import { EmployerLayout } from '@/components/employer/EmployerLayout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -182,21 +181,18 @@ export default function ApplicantsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col">
-        <Navbar />
-        <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <EmployerLayout>
+        <div className="flex flex-1 items-center justify-center min-h-[60vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      </div>
+      </EmployerLayout>
     )
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Navbar />
-
-      <main className="flex-1 pt-24 bg-muted/30">
-        <div className="container py-8">
+    <EmployerLayout>
+      <div className="bg-muted/30 min-h-full">
+        <div className="container py-8 max-w-5xl">
           <Button variant="ghost" size="sm" asChild className="mb-4">
             <Link href="/employer/gigs">
               <ArrowLeft className="mr-2 h-4 w-4" />
@@ -337,9 +333,7 @@ export default function ApplicantsPage() {
             </Card>
           )}
         </div>
-      </main>
-
-      <Footer />
+      </div>
 
       {/* Applicant Detail Modal */}
       <Dialog open={!!selectedApplicant} onOpenChange={() => setSelectedApplicant(null)}>
@@ -457,6 +451,6 @@ export default function ApplicantsPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </EmployerLayout>
   )
 }

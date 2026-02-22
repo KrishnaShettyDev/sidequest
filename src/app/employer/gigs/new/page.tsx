@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Navbar } from '@/components/shared/Navbar'
-import { Footer } from '@/components/shared/Footer'
+import { EmployerLayout } from '@/components/employer/EmployerLayout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -170,20 +169,17 @@ export default function NewGigPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col">
-        <Navbar />
-        <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <EmployerLayout>
+        <div className="flex flex-1 items-center justify-center min-h-[60vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      </div>
+      </EmployerLayout>
     )
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Navbar />
-
-      <main className="flex-1 pt-24 bg-muted/30">
+    <EmployerLayout>
+      <div className="bg-muted/30 min-h-full">
         <div className="container py-8">
           {/* Header */}
           <div className="mb-8">
@@ -522,9 +518,7 @@ export default function NewGigPage() {
             </div>
           </form>
         </div>
-      </main>
-
-      <Footer />
-    </div>
+      </div>
+    </EmployerLayout>
   )
 }

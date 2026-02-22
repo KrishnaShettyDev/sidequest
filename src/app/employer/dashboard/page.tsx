@@ -3,26 +3,25 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Navbar } from '@/components/shared/Navbar'
-import { Footer } from '@/components/shared/Footer'
+import { EmployerLayout } from '@/components/employer/EmployerLayout'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   Loader2,
-  Briefcase,
-  Users,
   Plus,
-  ArrowRight,
-  Eye,
   CheckCircle2,
-  Clock,
-  XCircle,
-  MessageSquare,
-  Settings,
+  Mail,
+  Phone,
+  Instagram,
+  MapPin,
+  Building2,
+  Calendar,
+  Users,
+  Pencil,
 } from 'lucide-react'
-import { formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow, format } from 'date-fns'
 import Link from 'next/link'
 
 interface EmployerProfile {
@@ -30,13 +29,9 @@ interface EmployerProfile {
   logo_url: string | null
   category: string
   area: string
-}
-
-interface Gig {
-  id: string
-  title: string
-  is_active: boolean
-  applications_count: number
+  email: string
+  phone: string
+  instagram_url: string | null
   created_at: string
 }
 
@@ -54,6 +49,9 @@ interface Application {
     id: string
     title: string
   }
+  skills: {
+    skill_name: string
+  }[]
 }
 
 export default function EmployerDashboard() {
@@ -61,19 +59,16 @@ export default function EmployerDashboard() {
   const supabase = createClient()
 
   const [profile, setProfile] = useState<EmployerProfile | null>(null)
-  const [gigs, setGigs] = useState<Gig[]>([])
   const [recentApplications, setRecentApplications] = useState<Application[]>([])
   const [stats, setStats] = useState({
-    totalGigs: 0,
-    activeGigs: 0,
     totalApplications: 0,
-    pendingApplications: 0,
   })
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     const loadDashboard = async () => {
-      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
 
       if (!user) {
         router.push('/?login=required')
@@ -83,51 +78,49 @@ export default function EmployerDashboard() {
       // Load employer profile
       const { data: profileData } = await supabase
         .from('employer_profiles')
-        .select('venue_name, logo_url, category, area')
+        .select('venue_name, logo_url, category, area, email, phone, instagram_url, created_at')
         .eq('id', user.id)
-        .single() as { data: EmployerProfile | null }
+        .single()
 
       if (profileData) {
         setProfile(profileData)
       }
 
-      // Load gigs
-      const { data: gigsData } = await supabase
-        .from('gigs')
-        .select('id, title, is_active, applications_count, created_at')
-        .eq('employer_id', user.id)
-        .order('created_at', { ascending: false }) as { data: Gig[] | null }
-
-      if (gigsData) {
-        setGigs(gigsData)
-        setStats(prev => ({
-          ...prev,
-          totalGigs: gigsData.length,
-          activeGigs: gigsData.filter(g => g.is_active).length,
-        }))
-      }
-
-      // Load recent applications
+      // Load recent applications with student skills
       const { data: applicationsData } = await supabase
         .from('applications')
         .select(`
           id,
           status,
           applied_at,
-          student:student_profiles(first_name, last_name, photo_url, college),
+          student:student_profiles(id, first_name, last_name, photo_url, college),
           gig:gigs(id, title)
         `)
         .eq('employer_id', user.id)
         .order('applied_at', { ascending: false })
-        .limit(10) as { data: Application[] | null }
+        .limit(10)
 
       if (applicationsData) {
-        setRecentApplications(applicationsData)
-        setStats(prev => ({
-          ...prev,
+        // Fetch skills for each student
+        const applicationsWithSkills = await Promise.all(
+          applicationsData.map(async (app: any) => {
+            const { data: skillsData } = await supabase
+              .from('student_skills')
+              .select('skill_name')
+              .eq('student_id', app.student?.id)
+              .limit(6)
+
+            return {
+              ...app,
+              skills: skillsData || [],
+            }
+          })
+        )
+
+        setRecentApplications(applicationsWithSkills)
+        setStats({
           totalApplications: applicationsData.length,
-          pendingApplications: applicationsData.filter(a => a.status === 'pending').length,
-        }))
+        })
       }
 
       setIsLoading(false)
@@ -136,314 +129,213 @@ export default function EmployerDashboard() {
     loadDashboard()
   }, [supabase, router])
 
-  const getStatusBadge = (status: string) => {
-    const config = {
-      pending: { label: 'New', variant: 'secondary' as const, icon: Clock },
-      viewed: { label: 'Viewed', variant: 'outline' as const, icon: Eye },
-      shortlisted: { label: 'Shortlisted', variant: 'default' as const, icon: CheckCircle2 },
-      accepted: { label: 'Accepted', variant: 'default' as const, icon: CheckCircle2 },
-      rejected: { label: 'Rejected', variant: 'destructive' as const, icon: XCircle },
-    }[status] || { label: status, variant: 'secondary' as const, icon: Clock }
-
-    const Icon = config.icon
-
-    return (
-      <Badge variant={config.variant} className="gap-1">
-        <Icon className="h-3 w-3" />
-        {config.label}
-      </Badge>
-    )
+  const getInstagramHandle = (url: string | null) => {
+    if (!url) return null
+    const match = url.match(/instagram\.com\/([^/?]+)/)
+    return match ? `@${match[1]}` : url
   }
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col">
-        <Navbar />
-        <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <EmployerLayout>
+        <div className="flex flex-1 items-center justify-center min-h-[60vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      </div>
+      </EmployerLayout>
     )
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Navbar />
-
-      <main className="flex-1 pt-24 bg-muted/30">
-        <div className="container py-8">
-          {/* Header */}
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-            <div>
-              <h1 className="text-3xl font-bold">
-                Welcome, {profile?.venue_name || 'Employer'}!
-              </h1>
-              <p className="text-muted-foreground">
-                Manage your gigs and find great talent
-              </p>
-            </div>
-            <Button asChild>
-              <Link href="/employer/gigs/new">
-                <Plus className="mr-2 h-4 w-4" />
-                Post New Gig
-              </Link>
-            </Button>
-          </div>
-
-          {/* Stats */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                    <Briefcase className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{stats.totalGigs}</p>
-                    <p className="text-sm text-muted-foreground">Total Gigs</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
-                    <CheckCircle2 className="h-5 w-5 text-green-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{stats.activeGigs}</p>
-                    <p className="text-sm text-muted-foreground">Active Gigs</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
-                    <Users className="h-5 w-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{stats.totalApplications}</p>
-                    <p className="text-sm text-muted-foreground">Applications</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
-                    <Clock className="h-5 w-5 text-amber-600" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{stats.pendingApplications}</p>
-                    <p className="text-sm text-muted-foreground">Pending Review</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="grid gap-6 lg:grid-cols-3">
-            {/* Main Content */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Recent Applicants */}
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>Recent Applicants</CardTitle>
-                  {recentApplications.length > 0 && (
-                    <Button variant="ghost" size="sm" asChild>
-                      <Link href="/employer/gigs">
-                        View all
-                        <ArrowRight className="ml-1 h-4 w-4" />
-                      </Link>
-                    </Button>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  {recentApplications.length > 0 ? (
-                    <div className="space-y-4">
-                      {recentApplications.slice(0, 5).map((app) => (
-                        <div
-                          key={app.id}
-                          className="flex items-center justify-between p-3 rounded-lg border"
-                        >
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10">
-                              <AvatarImage src={app.student?.photo_url || undefined} />
-                              <AvatarFallback className="bg-primary/10 text-primary">
-                                {app.student?.first_name?.[0]?.toUpperCase() || 'S'}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-medium">
-                                {app.student?.first_name} {app.student?.last_name}
-                              </p>
-                              <p className="text-sm text-muted-foreground">
-                                {app.student?.college} • Applied for {app.gig?.title}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            {getStatusBadge(app.status)}
-                            <span className="text-xs text-muted-foreground hidden sm:block">
-                              {formatDistanceToNow(new Date(app.applied_at), { addSuffix: true })}
-                            </span>
-                          </div>
+    <EmployerLayout>
+      <div className="bg-muted/30 min-h-full">
+        <div className="container py-8 max-w-6xl">
+          {/* Profile Card */}
+          <Card className="mb-8">
+            <CardContent className="p-6">
+              <div className="flex flex-col md:flex-row md:items-start gap-6">
+                {/* Avatar and Basic Info */}
+                <div className="flex items-start gap-4 flex-1">
+                  <Avatar className="h-20 w-20 rounded-xl border-2 border-border">
+                    <AvatarImage src={profile?.logo_url || undefined} />
+                    <AvatarFallback className="rounded-xl text-2xl bg-primary/10 text-primary">
+                      {profile?.venue_name?.[0]?.toUpperCase() || 'V'}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <h1 className="text-2xl font-bold">{profile?.venue_name}</h1>
+                    <div className="mt-2 space-y-1 text-sm text-muted-foreground">
+                      {profile?.email && (
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-4 w-4" />
+                          {profile.email}
                         </div>
-                      ))}
+                      )}
+                      {profile?.phone && (
+                        <div className="flex items-center gap-2">
+                          <Phone className="h-4 w-4" />
+                          +91 {profile.phone}
+                        </div>
+                      )}
+                      {profile?.instagram_url && (
+                        <div className="flex items-center gap-2">
+                          <Instagram className="h-4 w-4" />
+                          {getInstagramHandle(profile.instagram_url)}
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <Users className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3" />
-                      <p className="text-muted-foreground mb-4">No applications yet</p>
-                      <p className="text-sm text-muted-foreground">
-                        Post a gig to start receiving applications
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                  </div>
+                </div>
 
-              {/* Your Gigs */}
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <CardTitle>Your Gigs</CardTitle>
-                  <Button variant="ghost" size="sm" asChild>
-                    <Link href="/employer/gigs">
-                      Manage gigs
-                      <ArrowRight className="ml-1 h-4 w-4" />
-                    </Link>
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  {gigs.length > 0 ? (
-                    <div className="space-y-3">
-                      {gigs.slice(0, 5).map((gig) => (
-                        <Link
-                          key={gig.id}
-                          href={`/employer/gigs/${gig.id}`}
-                          className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors"
-                        >
-                          <div>
-                            <p className="font-medium">{gig.title}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {gig.applications_count} applicant{gig.applications_count !== 1 ? 's' : ''}
+                {/* Edit Profile Button */}
+                <Button variant="outline" asChild>
+                  <Link href="/employer/profile">
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Edit Profile
+                  </Link>
+                </Button>
+              </div>
+
+              {/* Stats Row */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t">
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Status</p>
+                  <div className="flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <span className="text-sm font-medium text-green-600">Verified</span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Category</p>
+                  <div className="flex items-center gap-1.5">
+                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium capitalize">{profile?.category || 'Not set'}</span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Member Since</p>
+                  <div className="flex items-center gap-1.5">
+                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">
+                      {profile?.created_at
+                        ? format(new Date(profile.created_at), 'MMM yyyy')
+                        : 'N/A'}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Applications</p>
+                  <div className="flex items-center gap-1.5">
+                    <Users className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">{stats.totalApplications}</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Recent Applicants Section */}
+          <div className="mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-muted-foreground">
+                Review & Shortlist the right ones for your gig!
+              </p>
+              <Button asChild>
+                <Link href="/employer/gigs/new">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Gig
+                </Link>
+              </Button>
+            </div>
+
+            {recentApplications.length > 0 ? (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {recentApplications.map((app) => (
+                  <Card key={app.id} className="overflow-hidden">
+                    <CardContent className="p-0">
+                      {/* Card Header */}
+                      <div className="p-4 pb-3">
+                        <div className="flex items-start gap-3">
+                          <Avatar className="h-12 w-12 border">
+                            <AvatarImage src={app.student?.photo_url || undefined} />
+                            <AvatarFallback className="bg-primary/10 text-primary font-medium">
+                              {app.student?.first_name?.[0]?.toUpperCase() || 'S'}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold truncate">
+                              {app.student?.first_name} {app.student?.last_name}
+                            </h3>
+                            <p className="text-sm text-muted-foreground flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              Applied: {format(new Date(app.applied_at), 'dd MMM yyyy')}
                             </p>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant={gig.is_active ? 'default' : 'secondary'}>
-                              {gig.is_active ? 'Active' : 'Inactive'}
+                        </div>
+                      </div>
+
+                      {/* Skills */}
+                      <div className="px-4 pb-3">
+                        <p className="text-xs text-muted-foreground mb-2">Skills</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {app.skills?.slice(0, 4).map((skill, idx) => (
+                            <Badge
+                              key={idx}
+                              variant="secondary"
+                              className="text-xs font-normal"
+                            >
+                              {skill.skill_name}
                             </Badge>
-                            <ArrowRight className="h-4 w-4 text-muted-foreground" />
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <Briefcase className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3" />
-                      <p className="text-muted-foreground mb-4">No gigs posted yet</p>
-                      <Button asChild>
-                        <Link href="/employer/gigs/new">
-                          <Plus className="mr-2 h-4 w-4" />
-                          Post Your First Gig
-                        </Link>
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                          ))}
+                          {app.skills && app.skills.length > 4 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{app.skills.length - 4} more
+                            </Badge>
+                          )}
+                          {(!app.skills || app.skills.length === 0) && (
+                            <span className="text-xs text-muted-foreground">No skills listed</span>
+                          )}
+                        </div>
+                      </div>
 
-            {/* Sidebar */}
-            <div className="space-y-6">
-              {/* Venue Card */}
+                      {/* Gig Applied For */}
+                      <div className="px-4 pb-3">
+                        <p className="text-xs text-muted-foreground flex items-center gap-1">
+                          <MapPin className="h-3 w-3" />
+                          Applied for: {app.gig?.title}
+                        </p>
+                      </div>
+
+                      {/* Action Button */}
+                      <Link
+                        href={`/employer/gigs/${app.gig?.id}/applicants`}
+                        className="block w-full bg-foreground text-background text-center py-3 text-sm font-medium hover:bg-foreground/90 transition-colors"
+                      >
+                        View Application
+                      </Link>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
               <Card>
-                <CardContent className="p-6">
-                  <div className="flex flex-col items-center text-center">
-                    <Avatar className="h-20 w-20 mb-4 rounded-xl">
-                      <AvatarImage src={profile?.logo_url || undefined} />
-                      <AvatarFallback className="rounded-xl text-2xl bg-primary/10 text-primary">
-                        {profile?.venue_name?.[0]?.toUpperCase() || 'V'}
-                      </AvatarFallback>
-                    </Avatar>
-                    <h3 className="font-semibold text-lg">
-                      {profile?.venue_name}
-                    </h3>
-                    {profile?.category && (
-                      <Badge variant="secondary" className="mt-2">
-                        {profile.category}
-                      </Badge>
-                    )}
-                    {profile?.area && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {profile.area}
-                      </p>
-                    )}
-                    <Button className="w-full mt-4" variant="outline" asChild>
-                      <Link href="/employer/profile">Edit Profile</Link>
-                    </Button>
-                  </div>
+                <CardContent className="py-12 text-center">
+                  <Users className="mx-auto h-12 w-12 text-muted-foreground/50 mb-3" />
+                  <p className="text-muted-foreground mb-4">No applications yet</p>
+                  <p className="text-sm text-muted-foreground mb-6">
+                    Post a gig to start receiving applications from talented students
+                  </p>
+                  <Button asChild>
+                    <Link href="/employer/gigs/new">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Post Your First Gig
+                    </Link>
+                  </Button>
                 </CardContent>
               </Card>
-
-              {/* Quick Links */}
-              <Card>
-                <CardContent className="p-4">
-                  <nav className="space-y-1">
-                    <Link
-                      href="/employer/gigs/new"
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted transition-colors"
-                    >
-                      <Plus className="h-5 w-5 text-muted-foreground" />
-                      <span>Post New Gig</span>
-                    </Link>
-                    <Link
-                      href="/employer/gigs"
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted transition-colors"
-                    >
-                      <Briefcase className="h-5 w-5 text-muted-foreground" />
-                      <span>Manage Gigs</span>
-                    </Link>
-                    <Link
-                      href="/employer/messages"
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted transition-colors"
-                    >
-                      <MessageSquare className="h-5 w-5 text-muted-foreground" />
-                      <span>Messages</span>
-                    </Link>
-                    <Link
-                      href="/employer/settings"
-                      className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-muted transition-colors"
-                    >
-                      <Settings className="h-5 w-5 text-muted-foreground" />
-                      <span>Settings</span>
-                    </Link>
-                  </nav>
-                </CardContent>
-              </Card>
-
-              {/* Tips Card */}
-              <Card className="bg-gradient-to-br from-primary/5 to-secondary/5">
-                <CardContent className="p-6">
-                  <h3 className="font-semibold mb-2">Tips for Success</h3>
-                  <ul className="text-sm text-muted-foreground space-y-2">
-                    <li>• Write clear job descriptions</li>
-                    <li>• Respond to applicants quickly</li>
-                    <li>• Highlight perks and benefits</li>
-                    <li>• Keep your venue profile updated</li>
-                  </ul>
-                </CardContent>
-              </Card>
-            </div>
+            )}
           </div>
         </div>
-      </main>
-
-      <Footer />
-    </div>
+      </div>
+    </EmployerLayout>
   )
 }
