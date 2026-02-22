@@ -23,7 +23,7 @@ import {
   MessageSquare,
   LayoutDashboard,
   FileText,
-  Sparkles,
+  ArrowRight,
 } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 
@@ -37,12 +37,22 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
   const [user, setUser] = useState<User | null>(initialUser || null)
   const [role, setRole] = useState<string | null>(initialRole || null)
   const [isOpen, setIsOpen] = useState(false)
+  const [scrolled, setScrolled] = useState(false)
   const supabase = createClient()
 
   useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 10)
+    }
+    window.addEventListener('scroll', handleScroll)
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  useEffect(() => {
     const getUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setUser(user)
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user
+      setUser(user || null)
 
       if (user) {
         const { data: profile } = await supabase
@@ -98,64 +108,61 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
   const applicationsLink = role === 'student' ? '/student/applications' : null
   const gigsLink = role === 'employer' ? '/employer/gigs' : null
 
-  const NavLinks = () => (
-    <>
-      <Link
-        href="/gigs"
-        className={`text-sm font-medium transition-colors hover:text-primary ${
-          pathname === '/gigs' ? 'text-primary' : 'text-muted-foreground'
-        }`}
-      >
-        Browse Gigs
-      </Link>
-      {!user && (
-        <Link
-          href="/#how-it-works"
-          className="text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
-        >
-          How It Works
-        </Link>
-      )}
-    </>
-  )
-
   return (
-    <nav className="sticky top-0 z-50 w-full border-b border-white/5 glass">
+    <nav
+      className={`sticky top-0 z-50 w-full transition-all duration-300 ${
+        scrolled
+          ? 'bg-background/80 backdrop-blur-md border-b border-border shadow-subtle'
+          : 'bg-transparent'
+      }`}
+    >
       <div className="container flex h-16 items-center justify-between">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-2 group">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-accent glow-sm transition-all group-hover:scale-105">
-            <Sparkles className="h-5 w-5 text-white" />
-          </div>
-          <span className="text-xl font-bold tracking-tight">
-            Side<span className="gradient-text">Quest</span>
+          <span className="text-2xl font-display tracking-tight">
+            SideQuest
           </span>
         </Link>
 
         {/* Desktop Navigation */}
         <div className="hidden md:flex md:items-center md:gap-8">
-          <NavLinks />
+          <Link
+            href="/gigs"
+            className={`text-[15px] font-medium transition-colors link-underline ${
+              pathname === '/gigs' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Browse Gigs
+          </Link>
+          {!user && (
+            <Link
+              href="/#how-it-works"
+              className="text-[15px] font-medium text-muted-foreground transition-colors hover:text-foreground link-underline"
+            >
+              How It Works
+            </Link>
+          )}
         </div>
 
         {/* Desktop Auth */}
-        <div className="hidden md:flex md:items-center md:gap-3">
+        <div className="hidden md:flex md:items-center md:gap-4">
           {user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full ring-2 ring-primary/20 hover:ring-primary/40 transition-all">
-                  <Avatar className="h-10 w-10">
+                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                  <Avatar className="h-10 w-10 border-2 border-border">
                     <AvatarImage
                       src={user.user_metadata?.avatar_url}
                       alt={user.user_metadata?.full_name}
                     />
-                    <AvatarFallback className="bg-primary/20 text-primary">
+                    <AvatarFallback className="bg-secondary text-foreground font-medium">
                       {getInitials(user.user_metadata?.full_name || user.email)}
                     </AvatarFallback>
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56 glass border-white/10" align="end" forceMount>
-                <div className="flex items-center justify-start gap-2 p-2">
+              <DropdownMenuContent className="w-56" align="end" forceMount>
+                <div className="flex items-center justify-start gap-2 p-3">
                   <div className="flex flex-col space-y-1 leading-none">
                     <p className="font-medium">
                       {user.user_metadata?.full_name || 'User'}
@@ -163,7 +170,7 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
                     <p className="text-xs text-muted-foreground">{user.email}</p>
                   </div>
                 </div>
-                <DropdownMenuSeparator className="bg-white/10" />
+                <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link href={dashboardLink} className="cursor-pointer">
                     <LayoutDashboard className="mr-2 h-4 w-4" />
@@ -198,7 +205,7 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
                     Messages
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-white/10" />
+                <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
                   <Link
                     href={role === 'employer' ? '/employer/settings' : '/student/settings'}
@@ -219,12 +226,16 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
             </DropdownMenu>
           ) : (
             <>
-              <Button variant="ghost" asChild className="text-muted-foreground hover:text-foreground">
-                <Link href="/?login=true">Sign In</Link>
-              </Button>
-              <Button asChild className="btn-gradient rounded-full px-6">
-                <Link href="/?signup=true">Get Started</Link>
-              </Button>
+              <Link
+                href="/?login=true"
+                className="text-[15px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Sign In
+              </Link>
+              <Link href="/?signup=true" className="btn-primary">
+                Get Started
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             </>
           )}
         </div>
@@ -232,15 +243,15 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
         {/* Mobile Menu */}
         <Sheet open={isOpen} onOpenChange={setIsOpen}>
           <SheetTrigger asChild className="md:hidden">
-            <Button variant="ghost" size="icon" className="text-muted-foreground">
+            <Button variant="ghost" size="icon">
               <Menu className="h-5 w-5" />
             </Button>
           </SheetTrigger>
-          <SheetContent side="right" className="w-[300px] sm:w-[400px] glass border-white/10">
-            <div className="flex flex-col gap-6 py-6">
+          <SheetContent side="right" className="w-[300px] sm:w-[400px]">
+            <div className="flex flex-col gap-6 py-8">
               <Link
                 href="/gigs"
-                className="text-lg font-medium hover:text-primary transition-colors"
+                className="text-xl font-display hover:text-muted-foreground transition-colors"
                 onClick={() => setIsOpen(false)}
               >
                 Browse Gigs
@@ -249,48 +260,56 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
                 <>
                   <Link
                     href={dashboardLink}
-                    className="text-lg font-medium hover:text-primary transition-colors"
+                    className="text-xl font-display hover:text-muted-foreground transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     Dashboard
                   </Link>
                   <Link
                     href={profileLink}
-                    className="text-lg font-medium hover:text-primary transition-colors"
+                    className="text-xl font-display hover:text-muted-foreground transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     Profile
                   </Link>
                   <Link
                     href={messagesLink}
-                    className="text-lg font-medium hover:text-primary transition-colors"
+                    className="text-xl font-display hover:text-muted-foreground transition-colors"
                     onClick={() => setIsOpen(false)}
                   >
                     Messages
                   </Link>
-                  <Button
-                    variant="destructive"
-                    className="mt-4"
-                    onClick={() => {
-                      handleSignOut()
-                      setIsOpen(false)
-                    }}
-                  >
-                    Sign Out
-                  </Button>
+                  <div className="pt-6 border-t border-border">
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-destructive hover:text-destructive"
+                      onClick={() => {
+                        handleSignOut()
+                        setIsOpen(false)
+                      }}
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Sign Out
+                    </Button>
+                  </div>
                 </>
               ) : (
-                <div className="flex flex-col gap-3 mt-4">
-                  <Button variant="outline" asChild className="border-white/10">
-                    <Link href="/?login=true" onClick={() => setIsOpen(false)}>
-                      Sign In
-                    </Link>
-                  </Button>
-                  <Button asChild className="btn-gradient">
-                    <Link href="/?signup=true" onClick={() => setIsOpen(false)}>
-                      Get Started
-                    </Link>
-                  </Button>
+                <div className="flex flex-col gap-3 pt-6 border-t border-border">
+                  <Link
+                    href="/?login=true"
+                    className="btn-secondary w-full text-center"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    href="/?signup=true"
+                    className="btn-primary w-full justify-center"
+                    onClick={() => setIsOpen(false)}
+                  >
+                    Get Started
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
                 </div>
               )}
             </div>

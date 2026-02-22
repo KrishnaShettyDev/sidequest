@@ -6,8 +6,7 @@ import { Navbar } from '@/components/shared/Navbar'
 import { Footer } from '@/components/shared/Footer'
 import { GigCard } from '@/components/gigs/GigCard'
 import { GigFilters } from '@/components/gigs/GigFilters'
-import { Loader2, Briefcase } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Loader2, Briefcase, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
 
 interface Gig {
@@ -123,18 +122,18 @@ export default function GigsPage() {
     <div className="flex min-h-screen flex-col">
       <Navbar />
 
-      <main className="flex-1">
-        <div className="container py-8">
+      <main className="flex-1 bg-background">
+        <div className="container py-12">
           {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold mb-2">Browse Gigs</h1>
-            <p className="text-muted-foreground">
+          <div className="mb-10">
+            <h1 className="text-title mb-3">Browse Gigs</h1>
+            <p className="text-body-lg text-muted-foreground">
               Find your perfect side quest at amazing venues across Hyderabad
             </p>
           </div>
 
           {/* Filters */}
-          <div className="mb-8">
+          <div className="mb-10">
             <GigFilters
               search={search}
               setSearch={setSearch}
@@ -151,11 +150,11 @@ export default function GigsPage() {
           {/* Results */}
           {isLoading ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <Loader2 className="h-8 w-8 animate-spin text-foreground" />
             </div>
           ) : filteredGigs.length > 0 ? (
             <>
-              <p className="mb-4 text-sm text-muted-foreground">
+              <p className="mb-6 text-body-sm text-muted-foreground">
                 Showing {filteredGigs.length} gig{filteredGigs.length !== 1 ? 's' : ''}
               </p>
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -166,33 +165,34 @@ export default function GigsPage() {
             </>
           ) : (
             <div className="text-center py-20">
-              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary">
                 <Briefcase className="h-8 w-8 text-muted-foreground" />
               </div>
-              <h3 className="text-lg font-semibold mb-2">No gigs found</h3>
-              <p className="text-muted-foreground mb-6">
+              <h3 className="text-subheading mb-2">No gigs found</h3>
+              <p className="text-body text-muted-foreground mb-6">
                 {search || category !== 'all' || area !== 'all' || scheduleType !== 'all'
                   ? 'Try adjusting your filters or search terms'
                   : 'No gigs are currently available. Check back soon!'}
               </p>
               {(search || category !== 'all' || area !== 'all' || scheduleType !== 'all') && (
-                <Button variant="outline" onClick={clearFilters}>
+                <button className="btn-secondary" onClick={clearFilters}>
                   Clear all filters
-                </Button>
+                </button>
               )}
             </div>
           )}
 
           {/* CTA for non-logged-in users */}
           {!user && filteredGigs.length > 0 && (
-            <div className="mt-12 rounded-2xl bg-gradient-to-r from-primary/10 via-primary/5 to-secondary/10 p-8 text-center">
-              <h3 className="text-xl font-bold mb-2">Ready to start your side quest?</h3>
-              <p className="text-muted-foreground mb-4">
+            <div className="mt-16 card-base p-10 text-center">
+              <h3 className="text-subheading mb-3">Ready to start your side quest?</h3>
+              <p className="text-body text-muted-foreground mb-6">
                 Create a free account to apply for gigs and connect with venues
               </p>
-              <Button asChild size="lg">
-                <Link href="/?signup=true">Get Started</Link>
-              </Button>
+              <Link href="/?signup=true" className="btn-primary">
+                Get Started
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             </div>
           )}
         </div>

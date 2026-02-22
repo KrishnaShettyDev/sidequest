@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
 import { Loader2 } from 'lucide-react'
 
 interface GoogleSignInButtonProps {
@@ -42,12 +41,10 @@ export function GoogleSignInButton({
   }
 
   return (
-    <Button
-      variant="outline"
-      size="lg"
+    <button
       onClick={handleGoogleSignIn}
       disabled={isLoading}
-      className={`w-full gap-2 ${className}`}
+      className={`w-full btn-secondary gap-3 h-12 ${className || ''}`}
     >
       {isLoading ? (
         <Loader2 className="h-5 w-5 animate-spin" />
@@ -72,6 +69,6 @@ export function GoogleSignInButton({
         </svg>
       )}
       {mode === 'signin' ? 'Continue with Google' : 'Sign up with Google'}
-    </Button>
+    </button>
   )
 }

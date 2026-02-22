@@ -10,7 +10,7 @@ import { HowItWorks } from '@/components/landing/HowItWorks'
 import { Categories } from '@/components/landing/Categories'
 import { AuthModal } from '@/components/auth/AuthModal'
 import { RoleSelector } from '@/components/auth/RoleSelector'
-import { ArrowRight, Sparkles } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import type { User } from '@supabase/supabase-js'
 
 function HomeContent() {
@@ -38,7 +38,8 @@ function HomeContent() {
 
     // Get current user
     const getUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user
+      const { data: { session } } = await supabase.auth.getSession()
+      const user = session?.user || null
       setUser(user)
 
       // Show role selector for new users
@@ -79,40 +80,22 @@ function HomeContent() {
         <Categories />
 
         {/* CTA Section */}
-        <section className="relative py-24 md:py-36 overflow-hidden">
-          {/* Background effects */}
-          <div className="absolute inset-0 -z-10">
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-[500px] w-[800px] rounded-full bg-primary/20 blur-[120px]" />
-          </div>
-
+        <section className="section-spacing-sm">
           <div className="container">
-            <div className="relative mx-auto max-w-4xl">
-              {/* Card */}
-              <div className="glass rounded-3xl p-8 md:p-16 text-center border border-primary/20">
-                {/* Floating sparkle */}
-                <div className="absolute -top-6 left-1/2 -translate-x-1/2">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-accent shadow-lg shadow-primary/30">
-                    <Sparkles className="h-6 w-6 text-white" />
-                  </div>
-                </div>
-
-                <h2 className="mb-4 text-3xl font-bold md:text-5xl">
-                  Ready to start your{' '}
-                  <span className="gradient-text font-display">side quest?</span>
-                </h2>
-                <p className="mb-10 text-lg text-muted-foreground max-w-xl mx-auto">
-                  Join hundreds of students already working at amazing places across Hyderabad
-                </p>
-                <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
-                  <button
-                    onClick={handleGetStarted}
-                    className="btn-gradient inline-flex items-center gap-2 rounded-full px-8 py-4 text-lg font-semibold shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all"
-                  >
-                    Get Started — It&apos;s Free
-                    <ArrowRight className="h-5 w-5" />
-                  </button>
-                </div>
-              </div>
+            <div className="mx-auto max-w-3xl text-center">
+              <h2 className="text-title mb-6">
+                Ready to start your <span className="highlight italic">side quest</span>?
+              </h2>
+              <p className="text-body-lg text-muted-foreground mb-10 max-w-xl mx-auto">
+                Join hundreds of students already working at amazing places across Hyderabad
+              </p>
+              <button
+                onClick={handleGetStarted}
+                className="btn-primary"
+              >
+                Get Started — It&apos;s Free
+                <ArrowRight className="h-4 w-4" />
+              </button>
             </div>
           </div>
         </section>

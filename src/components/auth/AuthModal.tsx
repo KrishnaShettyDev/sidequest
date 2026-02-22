@@ -8,7 +8,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { GoogleSignInButton } from './GoogleSignInButton'
-import { Briefcase } from 'lucide-react'
 
 interface AuthModalProps {
   isOpen: boolean
@@ -19,32 +18,29 @@ interface AuthModalProps {
 export function AuthModal({ isOpen, onClose, mode = 'signin' }: AuthModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-            <Briefcase className="h-6 w-6 text-primary-foreground" />
-          </div>
-          <DialogTitle className="text-2xl">
-            {mode === 'signin' ? 'Welcome back!' : 'Join SideQuest'}
+      <DialogContent className="sm:max-w-md p-8">
+        <DialogHeader className="text-center space-y-4">
+          <DialogTitle className="text-subheading">
+            {mode === 'signin' ? 'Welcome back' : 'Join SideQuest'}
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="text-body text-muted-foreground">
             {mode === 'signin'
               ? 'Sign in to continue your journey'
               : 'Create an account to find or post gigs'}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="mt-6">
+        <div className="mt-8">
           <GoogleSignInButton mode={mode} />
         </div>
 
-        <p className="mt-6 text-center text-sm text-muted-foreground">
+        <p className="mt-8 text-center text-body-sm text-muted-foreground">
           By continuing, you agree to our{' '}
-          <a href="/terms" className="underline hover:text-primary">
+          <a href="/terms" className="underline hover:text-foreground transition-colors">
             Terms of Service
           </a>{' '}
           and{' '}
-          <a href="/privacy" className="underline hover:text-primary">
+          <a href="/privacy" className="underline hover:text-foreground transition-colors">
             Privacy Policy
           </a>
         </p>

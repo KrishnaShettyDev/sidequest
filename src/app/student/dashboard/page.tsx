@@ -96,14 +96,14 @@ export default function StudentDashboard() {
           .from('student_profiles')
           .select('*')
           .eq('id', user.id)
-          .single()
+          .single() as { data: StudentProfile | null, error: Error | null }
 
         if (profileError) {
           console.error('Profile error:', profileError)
         }
 
         if (profileData) {
-          setProfile(profileData as StudentProfile)
+          setProfile(profileData)
 
           // Calculate profile completion
           const fields = [

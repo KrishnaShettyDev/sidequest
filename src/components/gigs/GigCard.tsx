@@ -1,10 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { Card, CardContent } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
-import { MapPin, Clock, IndianRupee, Calendar } from 'lucide-react'
+import { MapPin, Clock, IndianRupee, ArrowUpRight } from 'lucide-react'
 import { CATEGORIES } from '@/lib/constants'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -53,70 +51,65 @@ export function GigCard({ gig }: GigCardProps) {
   }[gig.schedule_type] || gig.schedule_type
 
   return (
-    <Link href={`/gigs/${gig.id}`}>
-      <Card className="h-full transition-all hover:shadow-lg hover:border-primary/50 cursor-pointer">
-        <CardContent className="p-5">
-          {/* Header */}
-          <div className="flex items-start gap-3 mb-4">
-            <Avatar className="h-12 w-12 rounded-lg">
-              <AvatarImage src={gig.employer?.logo_url || undefined} />
-              <AvatarFallback className="rounded-lg bg-primary/10 text-primary">
-                {gig.employer?.venue_name?.[0]?.toUpperCase() || 'V'}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-lg leading-tight line-clamp-1">
-                {gig.title}
-              </h3>
-              <p className="text-sm text-muted-foreground line-clamp-1">
-                {gig.employer?.venue_name || 'Unknown Venue'}
-              </p>
-            </div>
+    <Link href={`/gigs/${gig.id}`} className="group">
+      <div className="card-base card-hover h-full p-5">
+        {/* Header */}
+        <div className="flex items-start gap-3 mb-4">
+          <Avatar className="h-12 w-12 rounded-xl border border-border">
+            <AvatarImage src={gig.employer?.logo_url || undefined} />
+            <AvatarFallback className="rounded-xl bg-secondary text-foreground font-medium">
+              {gig.employer?.venue_name?.[0]?.toUpperCase() || 'V'}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <h3 className="font-medium text-lg leading-tight line-clamp-1 group-hover:text-foreground/80 transition-colors">
+              {gig.title}
+            </h3>
+            <p className="text-body-sm text-muted-foreground line-clamp-1">
+              {gig.employer?.venue_name || 'Unknown Venue'}
+            </p>
           </div>
+          <ArrowUpRight className="h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+        </div>
 
-          {/* Category Badge */}
-          <div className="mb-3">
-            <Badge variant="secondary" className="text-xs">
-              {category?.name || gig.category}
-            </Badge>
+        {/* Category Badge */}
+        <div className="mb-3">
+          <span className="badge text-xs">
+            {category?.name || gig.category}
+          </span>
+        </div>
+
+        {/* Description */}
+        <p className="text-body-sm text-muted-foreground line-clamp-2 mb-4">
+          {gig.description}
+        </p>
+
+        {/* Details */}
+        <div className="space-y-2">
+          <div className="flex items-center text-body-sm text-muted-foreground">
+            <MapPin className="h-4 w-4 mr-2 flex-shrink-0" />
+            <span className="line-clamp-1">{gig.area}</span>
           </div>
-
-          {/* Description */}
-          <p className="text-sm text-muted-foreground line-clamp-2 mb-4">
-            {gig.description}
-          </p>
-
-          {/* Details */}
-          <div className="space-y-2">
-            <div className="flex items-center text-sm text-muted-foreground">
-              <MapPin className="h-4 w-4 mr-2 flex-shrink-0" />
-              <span className="line-clamp-1">{gig.area}</span>
-            </div>
-            <div className="flex items-center text-sm text-muted-foreground">
-              <Clock className="h-4 w-4 mr-2 flex-shrink-0" />
-              <span>{scheduleLabel}</span>
-              {gig.schedule_details && (
-                <span className="ml-1 text-xs">({gig.schedule_details})</span>
-              )}
-            </div>
-            <div className="flex items-center text-sm font-medium text-primary">
-              <IndianRupee className="h-4 w-4 mr-1 flex-shrink-0" />
-              <span>{formatPay()}</span>
-            </div>
+          <div className="flex items-center text-body-sm text-muted-foreground">
+            <Clock className="h-4 w-4 mr-2 flex-shrink-0" />
+            <span>{scheduleLabel}</span>
+            {gig.schedule_details && (
+              <span className="ml-1 text-xs">({gig.schedule_details})</span>
+            )}
           </div>
-
-          {/* Footer */}
-          <div className="mt-4 pt-3 border-t flex items-center justify-between">
-            <div className="flex items-center text-xs text-muted-foreground">
-              <Calendar className="h-3 w-3 mr-1" />
-              {formatDistanceToNow(new Date(gig.created_at), { addSuffix: true })}
-            </div>
-            <span className="text-xs font-medium text-primary">
-              View Details →
-            </span>
+          <div className="flex items-center text-body-sm font-medium text-foreground">
+            <IndianRupee className="h-4 w-4 mr-1 flex-shrink-0" />
+            <span>{formatPay()}</span>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+
+        {/* Footer */}
+        <div className="mt-4 pt-3 border-t border-border">
+          <span className="text-xs text-muted-foreground">
+            Posted {formatDistanceToNow(new Date(gig.created_at), { addSuffix: true })}
+          </span>
+        </div>
+      </div>
     </Link>
   )
 }
