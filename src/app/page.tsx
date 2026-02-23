@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, useEffect, Suspense, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useAuth } from '@/lib/auth'
 import { Navbar } from '@/components/shared/Navbar'
 import { Footer } from '@/components/shared/Footer'
 import { Hero } from '@/components/landing/Hero'
@@ -12,19 +12,17 @@ import { FAQ } from '@/components/landing/FAQ'
 import { AuthModal } from '@/components/auth/AuthModal'
 import { RoleSelector } from '@/components/auth/RoleSelector'
 import { ArrowRight } from 'lucide-react'
-import type { User } from '@supabase/supabase-js'
 
 function HomeContent() {
   const searchParams = useSearchParams()
-  const [user, setUser] = useState<User | null>(null)
+  const { user, isAuthenticated, isLoading } = useAuth()
+
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signup')
   const [showRoleSelector, setShowRoleSelector] = useState(false)
 
-  const supabase = createClient()
-
+  // Handle URL params for auth modals
   useEffect(() => {
-    // Check for query params
     const login = searchParams.get('login')
     const signup = searchParams.get('signup')
     const newUser = searchParams.get('new_user')
@@ -37,43 +35,39 @@ function HomeContent() {
       setShowAuthModal(true)
     }
 
-    // Get current user
-    const getUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      const user = session?.user || null
-      setUser(user)
-
-      // Show role selector for new users
-      if (user && newUser === 'true') {
-        setShowRoleSelector(true)
-      }
+    // Show role selector for new users who just signed up
+    if (isAuthenticated && user && newUser === 'true') {
+      setShowRoleSelector(true)
     }
+  }, [searchParams, isAuthenticated, user])
 
-    getUser()
+  // Close auth modal when user signs in
+  useEffect(() => {
+    if (isAuthenticated && showAuthModal) {
+      setShowAuthModal(false)
+    }
+  }, [isAuthenticated, showAuthModal])
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setUser(session?.user || null)
-      }
-    )
-
-    return () => subscription.unsubscribe()
-  }, [searchParams, supabase])
-
-  const handleGetStarted = () => {
-    if (user) {
-      // User is logged in, redirect to gigs
+  const handleGetStarted = useCallback(() => {
+    if (isAuthenticated) {
       window.location.href = '/gigs'
     } else {
       setAuthMode('signup')
       setShowAuthModal(true)
     }
-  }
+  }, [isAuthenticated])
+
+  const handleCloseAuthModal = useCallback(() => {
+    setShowAuthModal(false)
+  }, [])
+
+  const handleCloseRoleSelector = useCallback(() => {
+    setShowRoleSelector(false)
+  }, [])
 
   return (
     <>
-      <Navbar user={user} />
+      <Navbar />
 
       <main className="flex-1">
         <Hero onGetStarted={handleGetStarted} />
@@ -94,6 +88,7 @@ function HomeContent() {
               <button
                 onClick={handleGetStarted}
                 className="btn-primary"
+                disabled={isLoading}
               >
                 Get Started — It&apos;s Free
                 <ArrowRight className="h-4 w-4" />
@@ -108,7 +103,7 @@ function HomeContent() {
       {/* Auth Modal */}
       <AuthModal
         isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
+        onClose={handleCloseAuthModal}
         mode={authMode}
       />
 
@@ -116,7 +111,7 @@ function HomeContent() {
       {user && (
         <RoleSelector
           isOpen={showRoleSelector}
-          onClose={() => setShowRoleSelector(false)}
+          onClose={handleCloseRoleSelector}
           userId={user.id}
           userEmail={user.email || ''}
           userName={user.user_metadata?.full_name}

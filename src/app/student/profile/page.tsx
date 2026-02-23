@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useAuth, getSupabase } from '@/lib/auth'
+import { RequireAuth } from '@/components/auth/RequireAuth'
 import { Navbar } from '@/components/shared/Navbar'
 import { Footer } from '@/components/shared/Footer'
 import { Button } from '@/components/ui/button'
@@ -36,6 +36,7 @@ import {
 } from 'lucide-react'
 import { GENDERS, STUDENT_YEARS, INDIAN_STATES, SKILL_CATEGORIES, SKILLS, PROFICIENCY_LEVELS } from '@/lib/constants'
 import { toast } from 'sonner'
+import { sanitizeInput, sanitizeUrl, isValidPhone } from '@/lib/utils'
 
 interface Skill {
   id?: string
@@ -58,12 +59,11 @@ const emptySkill: Skill = {
   tools_software: '',
 }
 
-export default function StudentProfilePage() {
-  const router = useRouter()
-  const supabase = createClient()
+function ProfileContent() {
+  const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [userId, setUserId] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Profile form state
   const [formData, setFormData] = useState({
@@ -91,17 +91,12 @@ export default function StudentProfilePage() {
   const [currentSkill, setCurrentSkill] = useState<Skill>(emptySkill)
 
   useEffect(() => {
+    if (!user) return
+
+    const supabase = getSupabase()
+
     const loadProfile = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession(); const user = session?.user
-
-        if (!user) {
-          router.push('/?login=required')
-          return
-        }
-
-        setUserId(user.id)
-
         // Load profile
         const { data: profile } = await supabase
           .from('student_profiles')
@@ -146,7 +141,7 @@ export default function StudentProfilePage() {
     }
 
     loadProfile()
-  }, [supabase, router])
+  }, [user])
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -158,30 +153,41 @@ export default function StudentProfilePage() {
       return
     }
 
+    // Validate phone number
+    if (!isValidPhone(formData.phone)) {
+      toast.error('Please enter a valid phone number')
+      return
+    }
+
+    if (!user) {
+      toast.error('Please sign in to update your profile')
+      return
+    }
+
     setIsSaving(true)
+    const supabase = getSupabase()
 
     try {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error } = await (supabase as any)
-        .from('student_profiles')
+      const { error } = await (supabase.from('student_profiles') as any)
         .update({
-          first_name: formData.first_name,
-          last_name: formData.last_name,
-          phone: formData.phone,
+          first_name: sanitizeInput(formData.first_name),
+          last_name: sanitizeInput(formData.last_name),
+          phone: sanitizeInput(formData.phone),
           birth_date: formData.birth_date || null,
           gender: formData.gender || null,
-          bio: formData.bio || null,
-          emergency_contact_name: formData.emergency_contact_name || null,
-          emergency_contact_phone: formData.emergency_contact_phone || null,
-          address_line: formData.address_line || null,
-          city: formData.city || null,
+          bio: sanitizeInput(formData.bio) || null,
+          emergency_contact_name: sanitizeInput(formData.emergency_contact_name) || null,
+          emergency_contact_phone: sanitizeInput(formData.emergency_contact_phone) || null,
+          address_line: sanitizeInput(formData.address_line) || null,
+          city: sanitizeInput(formData.city) || null,
           state: formData.state || null,
-          pincode: formData.pincode || null,
-          college: formData.college,
+          pincode: sanitizeInput(formData.pincode) || null,
+          college: sanitizeInput(formData.college),
           year: formData.year,
-          photo_url: formData.photo_url || null,
+          photo_url: sanitizeUrl(formData.photo_url) || null,
         })
-        .eq('id', userId)
+        .eq('id', user.id)
 
       if (error) throw error
 
@@ -207,12 +213,35 @@ export default function StudentProfilePage() {
   }
 
   const handleDeleteSkill = async (skillToDelete: Skill) => {
-    if (skillToDelete.id) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any).from('student_skills').delete().eq('id', skillToDelete.id)
+    if (!skillToDelete.id || !user) {
+      toast.error('Unable to delete skill')
+      return
     }
-    setSkills(skills.filter(s => s.id !== skillToDelete.id))
-    toast.success('Skill removed')
+
+    setIsDeleting(true)
+    const supabase = getSupabase()
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase.from('student_skills') as any)
+        .delete()
+        .eq('id', skillToDelete.id)
+        .eq('student_id', user.id)
+
+      if (error) {
+        console.error('Error deleting skill:', error)
+        toast.error('Failed to remove skill')
+        return
+      }
+
+      setSkills(skills.filter(s => s.id !== skillToDelete.id))
+      toast.success('Skill removed')
+    } catch (err) {
+      console.error('Unexpected error:', err)
+      toast.error('An unexpected error occurred')
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   const handleSaveSkill = async () => {
@@ -221,21 +250,34 @@ export default function StudentProfilePage() {
       return
     }
 
+    if (!user) {
+      toast.error('Please sign in to save skills')
+      return
+    }
+
+    const supabase = getSupabase()
+
+    // Validate years of experience
+    const yearsExp = Math.max(0, Math.min(20, currentSkill.years_experience || 0))
+
     try {
+      // Sanitize inputs
+      const sanitizedSkill = {
+        skill_name: sanitizeInput(currentSkill.skill_name),
+        proficiency: currentSkill.proficiency,
+        profession_type: currentSkill.profession_type,
+        years_experience: yearsExp,
+        description: sanitizeInput(currentSkill.description) || null,
+        portfolio_url: sanitizeUrl(currentSkill.portfolio_url) || null,
+        tools_software: sanitizeInput(currentSkill.tools_software) || null,
+      }
+
       if (editingSkill?.id) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase as any)
-          .from('student_skills')
-          .update({
-            skill_name: currentSkill.skill_name,
-            proficiency: currentSkill.proficiency,
-            profession_type: currentSkill.profession_type,
-            years_experience: currentSkill.years_experience,
-            description: currentSkill.description || null,
-            portfolio_url: currentSkill.portfolio_url || null,
-            tools_software: currentSkill.tools_software || null,
-          })
+        const { error } = await (supabase.from('student_skills') as any)
+          .update(sanitizedSkill)
           .eq('id', editingSkill.id)
+          .eq('student_id', user.id)
 
         if (error) throw error
 
@@ -243,17 +285,10 @@ export default function StudentProfilePage() {
         toast.success('Skill updated')
       } else {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data, error } = await (supabase as any)
-          .from('student_skills')
+        const { data, error } = await (supabase.from('student_skills') as any)
           .insert({
-            student_id: userId,
-            skill_name: currentSkill.skill_name,
-            proficiency: currentSkill.proficiency,
-            profession_type: currentSkill.profession_type,
-            years_experience: currentSkill.years_experience,
-            description: currentSkill.description || null,
-            portfolio_url: currentSkill.portfolio_url || null,
-            tools_software: currentSkill.tools_software || null,
+            student_id: user.id,
+            ...sanitizedSkill,
           })
           .select()
           .single()
@@ -274,19 +309,14 @@ export default function StudentProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col">
-        <Navbar />
-        <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+      <div className="flex flex-1 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Navbar />
-
+    <>
       <main className="flex-1 pt-24 bg-muted/30">
         <div className="container py-8">
           <div className="mb-8">
@@ -487,6 +517,7 @@ export default function StudentProfilePage() {
                               variant="ghost"
                               size="icon"
                               onClick={() => handleEditSkill(skill)}
+                              disabled={isDeleting}
                             >
                               <Pencil className="h-4 w-4" />
                             </Button>
@@ -494,6 +525,7 @@ export default function StudentProfilePage() {
                               variant="ghost"
                               size="icon"
                               onClick={() => handleDeleteSkill(skill)}
+                              disabled={isDeleting}
                             >
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
@@ -608,8 +640,6 @@ export default function StudentProfilePage() {
         </div>
       </main>
 
-      <Footer />
-
       {/* Skill Dialog */}
       <Dialog open={isSkillDialogOpen} onOpenChange={setIsSkillDialogOpen}>
         <DialogContent className="max-w-md">
@@ -718,6 +748,18 @@ export default function StudentProfilePage() {
           </div>
         </DialogContent>
       </Dialog>
+    </>
+  )
+}
+
+export default function StudentProfilePage() {
+  return (
+    <div className="flex min-h-screen flex-col">
+      <Navbar />
+      <RequireAuth requiredRole="student">
+        <ProfileContent />
+      </RequireAuth>
+      <Footer />
     </div>
   )
 }

@@ -2,8 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
+import { useState } from 'react'
+import { useAuth } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -23,63 +23,26 @@ import {
   MessageSquare,
   LayoutDashboard,
   FileText,
+  Loader2,
 } from 'lucide-react'
-import type { User } from '@supabase/supabase-js'
 
-interface NavbarProps {
-  user?: User | null
-  role?: 'student' | 'employer' | null
-}
-
-export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
+export function Navbar() {
   const pathname = usePathname()
-  const [user, setUser] = useState<User | null>(initialUser || null)
-  const [role, setRole] = useState<string | null>(initialRole || null)
+  const { user, profile, isAuthenticated, isLoading, signOut } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
-  const supabase = createClient()
+  const [isSigningOut, setIsSigningOut] = useState(false)
 
-  useEffect(() => {
-    const getUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      const user = session?.user
-      setUser(user || null)
-
-      if (user) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', user.id)
-          .single() as { data: { role: string } | null }
-        setRole(profile?.role || null)
-      }
-    }
-
-    if (!initialUser) {
-      getUser()
-    }
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setUser(session?.user || null)
-        if (session?.user) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', session.user.id)
-            .single() as { data: { role: string } | null }
-          setRole(profile?.role || null)
-        } else {
-          setRole(null)
-        }
-      }
-    )
-
-    return () => subscription.unsubscribe()
-  }, [supabase, initialUser])
+  const role = profile?.role
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    window.location.href = '/'
+    setIsSigningOut(true)
+    try {
+      await signOut()
+      window.location.href = '/'
+    } catch (error) {
+      console.error('Sign out error:', error)
+      setIsSigningOut(false)
+    }
   }
 
   const getInitials = (name: string | undefined | null) => {
@@ -127,7 +90,7 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
           >
             About
           </Link>
-          {!user && (
+          {!isAuthenticated && !isLoading && (
             <Link
               href="/#how-it-works"
               className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -135,7 +98,7 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
               How It Works
             </Link>
           )}
-          {user && (
+          {isAuthenticated && (
             <Link
               href={dashboardLink}
               className={`text-sm font-medium transition-colors ${
@@ -149,7 +112,11 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
 
         {/* Desktop Auth - Right */}
         <div className="hidden md:flex md:items-center md:gap-3">
-          {user ? (
+          {isLoading ? (
+            <div className="h-9 w-9 flex items-center justify-center">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : isAuthenticated && user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-9 w-9 rounded-full p-0">
@@ -221,8 +188,13 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
                 <DropdownMenuItem
                   className="cursor-pointer text-destructive focus:text-destructive"
                   onClick={handleSignOut}
+                  disabled={isSigningOut}
                 >
-                  <LogOut className="mr-2 h-4 w-4" />
+                  {isSigningOut ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <LogOut className="mr-2 h-4 w-4" />
+                  )}
                   Sign out
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -268,7 +240,7 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
               >
                 About
               </Link>
-              {user ? (
+              {isAuthenticated ? (
                 <>
                   <Link
                     href={dashboardLink}
@@ -299,8 +271,13 @@ export function Navbar({ user: initialUser, role: initialRole }: NavbarProps) {
                         handleSignOut()
                         setIsOpen(false)
                       }}
+                      disabled={isSigningOut}
                     >
-                      <LogOut className="mr-2 h-4 w-4" />
+                      {isSigningOut ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <LogOut className="mr-2 h-4 w-4" />
+                      )}
                       Sign Out
                     </Button>
                   </div>

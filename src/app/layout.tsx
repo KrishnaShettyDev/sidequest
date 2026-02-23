@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './globals.css'
 import { Toaster } from '@/components/ui/sonner'
+import { Providers } from '@/components/providers/Providers'
 
 export const metadata: Metadata = {
   title: {
@@ -59,10 +60,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased">
-        <div className="relative flex min-h-screen flex-col">
-          {children}
-        </div>
-        <Toaster position="top-center" richColors />
+        <Providers>
+          <div className="relative flex min-h-screen flex-col">
+            {children}
+          </div>
+          <Toaster position="top-center" richColors />
+        </Providers>
       </body>
     </html>
   )

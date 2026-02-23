@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useState, useEffect, useCallback } from 'react'
+import { useAuth, getSupabase } from '@/lib/auth'
 import { EmployerLayout } from '@/components/employer/EmployerLayout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -59,60 +58,86 @@ interface Gig {
 }
 
 export default function EmployerGigsPage() {
-  const router = useRouter()
-  const supabase = createClient()
+  const { user } = useAuth()
 
   const [gigs, setGigs] = useState<Gig[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [deleteGigId, setDeleteGigId] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'active' | 'inactive'>('active')
   const [searchQuery, setSearchQuery] = useState('')
 
-  const loadGigs = async () => {
+  const loadGigs = useCallback(async () => {
+    if (!user) return
+
     setIsLoading(true)
-    const { data: { session } } = await supabase.auth.getSession()
-    const user = session?.user
+    const supabase = getSupabase()
 
-    if (!user) {
-      router.push('/?login=required')
-      return
+    try {
+      const { data, error } = await supabase
+        .from('gigs')
+        .select('*')
+        .eq('employer_id', user.id)
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error loading gigs:', error)
+        toast.error('Failed to load gigs')
+      } else {
+        setGigs(data || [])
+      }
+    } catch (err) {
+      console.error('Unexpected error:', err)
+      toast.error('An unexpected error occurred')
+    } finally {
+      setIsLoading(false)
     }
-
-    const { data, error } = await supabase
-      .from('gigs')
-      .select('*')
-      .eq('employer_id', user.id)
-      .order('created_at', { ascending: false })
-
-    if (error) {
-      console.error('Error loading gigs:', error)
-    } else {
-      setGigs(data || [])
-    }
-
-    setIsLoading(false)
-  }
+  }, [user])
 
   useEffect(() => {
     loadGigs()
-  }, [supabase, router])
+  }, [loadGigs])
 
   const deleteGig = async () => {
-    if (!deleteGigId) return
-
-    const { error } = await supabase
-      .from('gigs')
-      .delete()
-      .eq('id', deleteGigId)
-
-    if (error) {
-      toast.error('Failed to delete gig')
-    } else {
-      setGigs(gigs.filter(g => g.id !== deleteGigId))
-      toast.success('Gig deleted')
+    if (!deleteGigId || !user) {
+      toast.error('Unable to delete gig')
+      setDeleteGigId(null)
+      return
     }
 
-    setDeleteGigId(null)
+    // Verify the gig belongs to this employer (client-side check)
+    const gig = gigs.find((g) => g.id === deleteGigId)
+    if (!gig) {
+      toast.error('Gig not found')
+      setDeleteGigId(null)
+      return
+    }
+
+    setIsDeleting(true)
+    const supabase = getSupabase()
+
+    try {
+      // RLS policy ensures only owner can delete, but add employer_id check for extra safety
+      const { error } = await supabase
+        .from('gigs')
+        .delete()
+        .eq('id', deleteGigId)
+        .eq('employer_id', user.id)
+
+      if (error) {
+        console.error('Error deleting gig:', error)
+        toast.error('Failed to delete gig')
+      } else {
+        setGigs(gigs.filter(g => g.id !== deleteGigId))
+        toast.success('Gig deleted')
+      }
+    } catch (err) {
+      console.error('Unexpected error:', err)
+      toast.error('An unexpected error occurred')
+    } finally {
+      setIsDeleting(false)
+      setDeleteGigId(null)
+    }
   }
 
   // Filter gigs
@@ -174,7 +199,7 @@ export default function EmployerGigsPage() {
               className={cn(
                 'flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2',
                 activeTab === 'active'
-                  ? 'bg-amber-100 text-amber-900 border border-amber-200'
+                  ? 'bg-foreground text-background'
                   : 'bg-card border hover:bg-muted'
               )}
             >
@@ -182,8 +207,8 @@ export default function EmployerGigsPage() {
               <Badge
                 variant="secondary"
                 className={cn(
-                  'rounded-full',
-                  activeTab === 'active' ? 'bg-amber-200 text-amber-900' : ''
+                  'rounded-full text-xs',
+                  activeTab === 'active' ? 'bg-background/20 text-background' : ''
                 )}
               >
                 {activeCount}
@@ -194,7 +219,7 @@ export default function EmployerGigsPage() {
               className={cn(
                 'flex-1 py-3 px-4 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-2',
                 activeTab === 'inactive'
-                  ? 'bg-red-50 text-red-900 border border-red-200'
+                  ? 'bg-foreground text-background'
                   : 'bg-card border hover:bg-muted'
               )}
             >
@@ -202,8 +227,8 @@ export default function EmployerGigsPage() {
               <Badge
                 variant="secondary"
                 className={cn(
-                  'rounded-full',
-                  activeTab === 'inactive' ? 'bg-red-100 text-red-900' : ''
+                  'rounded-full text-xs',
+                  activeTab === 'inactive' ? 'bg-background/20 text-background' : ''
                 )}
               >
                 {inactiveCount}
@@ -294,7 +319,6 @@ export default function EmployerGigsPage() {
                           <Button
                             variant="default"
                             size="sm"
-                            className="bg-amber-500 hover:bg-amber-600 text-white"
                             asChild
                           >
                             <Link href={`/employer/gigs/${gig.id}/applicants`}>
@@ -377,12 +401,13 @@ export default function EmployerGigsPage() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={deleteGig}
+              disabled={isDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              Delete
+              {isDeleting ? 'Deleting...' : 'Delete'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

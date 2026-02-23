@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useAuth, getSupabase } from '@/lib/auth'
+import { RequireAuth } from '@/components/auth/RequireAuth'
 import { Navbar } from '@/components/shared/Navbar'
 import { Footer } from '@/components/shared/Footer'
 import { Button } from '@/components/ui/button'
@@ -41,12 +41,10 @@ interface Message {
   is_read: boolean
 }
 
-export default function StudentMessagesPage() {
-  const router = useRouter()
-  const supabase = createClient()
+function MessagesContent() {
+  const { user } = useAuth()
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const [userId, setUserId] = useState<string | null>(null)
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -55,19 +53,14 @@ export default function StudentMessagesPage() {
   const [isSending, setIsSending] = useState(false)
 
   useEffect(() => {
+    if (!user) return
+
+    const supabase = getSupabase()
+
     const loadConversations = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession(); const user = session?.user
-
-        if (!user) {
-          router.push('/?login=required')
-          return
-        }
-
-        setUserId(user.id)
-
-        const { data: convos } = await supabase
-          .from('conversations')
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: convos } = await (supabase.from('conversations') as any)
           .select(`
             id,
             employer_id,
@@ -80,9 +73,9 @@ export default function StudentMessagesPage() {
         if (convos) {
           // Get last message for each conversation
           const convosWithMessages = await Promise.all(
-            convos.map(async (convo) => {
-              const { data: lastMsg } = await supabase
-                .from('messages')
+            convos.map(async (convo: Conversation) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const { data: lastMsg } = await (supabase.from('messages') as any)
                 .select('content, sender_role')
                 .eq('conversation_id', convo.id)
                 .order('created_at', { ascending: false })
@@ -102,14 +95,16 @@ export default function StudentMessagesPage() {
     }
 
     loadConversations()
-  }, [supabase, router])
+  }, [user])
 
   useEffect(() => {
-    if (!selectedConversation) return
+    if (!selectedConversation || !user) return
+
+    const supabase = getSupabase()
 
     const loadMessages = async () => {
-      const { data } = await supabase
-        .from('messages')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data } = await (supabase.from('messages') as any)
         .select('*')
         .eq('conversation_id', selectedConversation.id)
         .order('created_at', { ascending: true }) as { data: Message[] | null }
@@ -119,8 +114,7 @@ export default function StudentMessagesPage() {
 
         // Mark messages as read
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any)
-          .from('messages')
+        await (supabase.from('messages') as any)
           .update({ is_read: true })
           .eq('conversation_id', selectedConversation.id)
           .eq('sender_role', 'employer')
@@ -150,7 +144,7 @@ export default function StudentMessagesPage() {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [selectedConversation, supabase])
+  }, [selectedConversation, user])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -158,16 +152,16 @@ export default function StudentMessagesPage() {
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newMessage.trim() || !selectedConversation || !userId) return
+    if (!newMessage.trim() || !selectedConversation || !user) return
 
     setIsSending(true)
+    const supabase = getSupabase()
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase as any)
-      .from('messages')
+    const { error } = await (supabase.from('messages') as any)
       .insert({
         conversation_id: selectedConversation.id,
-        sender_id: userId,
+        sender_id: user.id,
         sender_role: 'student',
         content: newMessage.trim(),
       })
@@ -176,8 +170,7 @@ export default function StudentMessagesPage() {
       setNewMessage('')
       // Update last_message_at
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from('conversations')
+      await (supabase.from('conversations') as any)
         .update({ last_message_at: new Date().toISOString() })
         .eq('id', selectedConversation.id)
     }
@@ -187,170 +180,173 @@ export default function StudentMessagesPage() {
 
   if (isLoading) {
     return (
-      <div className="flex min-h-screen flex-col">
-        <Navbar />
-        <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+      <div className="flex flex-1 items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <Navbar />
+    <main className="flex-1 pt-24 bg-muted/30">
+      <div className="container py-8">
+        <h1 className="text-3xl font-bold mb-8">Messages</h1>
 
-      <main className="flex-1 pt-24 bg-muted/30">
-        <div className="container py-8">
-          <h1 className="text-3xl font-bold mb-8">Messages</h1>
-
-          <div className="grid gap-6 lg:grid-cols-3">
-            {/* Conversations List */}
-            <Card className="lg:col-span-1">
-              <CardContent className="p-0">
-                <ScrollArea className="h-[600px]">
-                  {conversations.length > 0 ? (
-                    <div className="divide-y">
-                      {conversations.map((convo) => (
-                        <button
-                          key={convo.id}
-                          onClick={() => setSelectedConversation(convo)}
-                          className={cn(
-                            'w-full p-4 text-left hover:bg-muted/50 transition-colors',
-                            selectedConversation?.id === convo.id && 'bg-muted'
-                          )}
-                        >
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10 rounded-lg">
-                              <AvatarImage src={convo.employer?.logo_url || undefined} />
-                              <AvatarFallback className="rounded-lg bg-primary/10 text-primary">
-                                {convo.employer?.venue_name?.[0]?.toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">
-                                {convo.employer?.venue_name}
-                              </p>
-                              {convo.lastMessage && (
-                                <p className="text-sm text-muted-foreground truncate">
-                                  {convo.lastMessage.sender_role === 'student' ? 'You: ' : ''}
-                                  {convo.lastMessage.content}
-                                </p>
-                              )}
-                            </div>
-                            <span className="text-xs text-muted-foreground">
-                              {formatDistanceToNow(new Date(convo.last_message_at), { addSuffix: true })}
-                            </span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="p-8 text-center">
-                      <MessageSquare className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
-                      <p className="text-muted-foreground">No conversations yet</p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        Apply to gigs to start chatting with employers
-                      </p>
-                    </div>
-                  )}
-                </ScrollArea>
-              </CardContent>
-            </Card>
-
-            {/* Chat Window */}
-            <Card className="lg:col-span-2">
-              <CardContent className="p-0 h-[600px] flex flex-col">
-                {selectedConversation ? (
-                  <>
-                    {/* Chat Header */}
-                    <div className="p-4 border-b flex items-center gap-3">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="lg:hidden"
-                        onClick={() => setSelectedConversation(null)}
+        <div className="grid gap-6 lg:grid-cols-3">
+          {/* Conversations List */}
+          <Card className="lg:col-span-1">
+            <CardContent className="p-0">
+              <ScrollArea className="h-[600px]">
+                {conversations.length > 0 ? (
+                  <div className="divide-y">
+                    {conversations.map((convo) => (
+                      <button
+                        key={convo.id}
+                        onClick={() => setSelectedConversation(convo)}
+                        className={cn(
+                          'w-full p-4 text-left hover:bg-muted/50 transition-colors',
+                          selectedConversation?.id === convo.id && 'bg-muted'
+                        )}
                       >
-                        <ArrowLeft className="h-4 w-4" />
-                      </Button>
-                      <Avatar className="h-10 w-10 rounded-lg">
-                        <AvatarImage src={selectedConversation.employer?.logo_url || undefined} />
-                        <AvatarFallback className="rounded-lg bg-primary/10 text-primary">
-                          {selectedConversation.employer?.venue_name?.[0]?.toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium">{selectedConversation.employer?.venue_name}</p>
-                        <p className="text-xs text-muted-foreground">Employer</p>
-                      </div>
-                    </div>
-
-                    {/* Messages */}
-                    <ScrollArea className="flex-1 p-4">
-                      <div className="space-y-4">
-                        {messages.map((msg) => (
-                          <div
-                            key={msg.id}
-                            className={cn(
-                              'flex',
-                              msg.sender_role === 'student' ? 'justify-end' : 'justify-start'
-                            )}
-                          >
-                            <div
-                              className={cn(
-                                'max-w-[70%] rounded-lg px-4 py-2',
-                                msg.sender_role === 'student'
-                                  ? 'bg-primary text-primary-foreground'
-                                  : 'bg-muted'
-                              )}
-                            >
-                              <p className="text-sm">{msg.content}</p>
-                              <p
-                                className={cn(
-                                  'text-xs mt-1',
-                                  msg.sender_role === 'student'
-                                    ? 'text-primary-foreground/70'
-                                    : 'text-muted-foreground'
-                                )}
-                              >
-                                {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-10 w-10 rounded-lg">
+                            <AvatarImage src={convo.employer?.logo_url || undefined} />
+                            <AvatarFallback className="rounded-lg bg-primary/10 text-primary">
+                              {convo.employer?.venue_name?.[0]?.toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate">
+                              {convo.employer?.venue_name}
+                            </p>
+                            {convo.lastMessage && (
+                              <p className="text-sm text-muted-foreground truncate">
+                                {convo.lastMessage.sender_role === 'student' ? 'You: ' : ''}
+                                {convo.lastMessage.content}
                               </p>
-                            </div>
+                            )}
                           </div>
-                        ))}
-                        <div ref={messagesEndRef} />
-                      </div>
-                    </ScrollArea>
-
-                    {/* Message Input */}
-                    <form onSubmit={sendMessage} className="p-4 border-t">
-                      <div className="flex gap-2">
-                        <Input
-                          value={newMessage}
-                          onChange={(e) => setNewMessage(e.target.value)}
-                          placeholder="Type a message..."
-                          disabled={isSending}
-                        />
-                        <Button type="submit" disabled={isSending || !newMessage.trim()}>
-                          <Send className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </form>
-                  </>
+                          <span className="text-xs text-muted-foreground">
+                            {formatDistanceToNow(new Date(convo.last_message_at), { addSuffix: true })}
+                          </span>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 ) : (
-                  <div className="flex-1 flex items-center justify-center">
-                    <div className="text-center">
-                      <MessageSquare className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
-                      <p className="text-muted-foreground">Select a conversation to start chatting</p>
-                    </div>
+                  <div className="p-8 text-center">
+                    <MessageSquare className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                    <p className="text-muted-foreground">No conversations yet</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Apply to gigs to start chatting with employers
+                    </p>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </main>
+              </ScrollArea>
+            </CardContent>
+          </Card>
 
+          {/* Chat Window */}
+          <Card className="lg:col-span-2">
+            <CardContent className="p-0 h-[600px] flex flex-col">
+              {selectedConversation ? (
+                <>
+                  {/* Chat Header */}
+                  <div className="p-4 border-b flex items-center gap-3">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="lg:hidden"
+                      onClick={() => setSelectedConversation(null)}
+                    >
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                    <Avatar className="h-10 w-10 rounded-lg">
+                      <AvatarImage src={selectedConversation.employer?.logo_url || undefined} />
+                      <AvatarFallback className="rounded-lg bg-primary/10 text-primary">
+                        {selectedConversation.employer?.venue_name?.[0]?.toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <p className="font-medium">{selectedConversation.employer?.venue_name}</p>
+                      <p className="text-xs text-muted-foreground">Employer</p>
+                    </div>
+                  </div>
+
+                  {/* Messages */}
+                  <ScrollArea className="flex-1 p-4">
+                    <div className="space-y-4">
+                      {messages.map((msg) => (
+                        <div
+                          key={msg.id}
+                          className={cn(
+                            'flex',
+                            msg.sender_role === 'student' ? 'justify-end' : 'justify-start'
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              'max-w-[70%] rounded-lg px-4 py-2',
+                              msg.sender_role === 'student'
+                                ? 'bg-primary text-primary-foreground'
+                                : 'bg-muted'
+                            )}
+                          >
+                            <p className="text-sm">{msg.content}</p>
+                            <p
+                              className={cn(
+                                'text-xs mt-1',
+                                msg.sender_role === 'student'
+                                  ? 'text-primary-foreground/70'
+                                  : 'text-muted-foreground'
+                              )}
+                            >
+                              {formatDistanceToNow(new Date(msg.created_at), { addSuffix: true })}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                      <div ref={messagesEndRef} />
+                    </div>
+                  </ScrollArea>
+
+                  {/* Message Input */}
+                  <form onSubmit={sendMessage} className="p-4 border-t">
+                    <div className="flex gap-2">
+                      <Input
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        placeholder="Type a message..."
+                        disabled={isSending}
+                      />
+                      <Button type="submit" disabled={isSending || !newMessage.trim()}>
+                        <Send className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </form>
+                </>
+              ) : (
+                <div className="flex-1 flex items-center justify-center">
+                  <div className="text-center">
+                    <MessageSquare className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
+                    <p className="text-muted-foreground">Select a conversation to start chatting</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </main>
+  )
+}
+
+export default function StudentMessagesPage() {
+  return (
+    <div className="flex min-h-screen flex-col">
+      <Navbar />
+      <RequireAuth requiredRole="student">
+        <MessagesContent />
+      </RequireAuth>
       <Footer />
     </div>
   )

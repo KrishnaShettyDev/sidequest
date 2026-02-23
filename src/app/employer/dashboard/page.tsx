@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useAuth, getSupabase } from '@/lib/auth'
 import { EmployerLayout } from '@/components/employer/EmployerLayout'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -21,7 +20,7 @@ import {
   Users,
   Pencil,
 } from 'lucide-react'
-import { formatDistanceToNow, format } from 'date-fns'
+import { format } from 'date-fns'
 import Link from 'next/link'
 
 interface EmployerProfile {
@@ -55,8 +54,7 @@ interface Application {
 }
 
 export default function EmployerDashboard() {
-  const router = useRouter()
-  const supabase = createClient()
+  const { user } = useAuth()
 
   const [profile, setProfile] = useState<EmployerProfile | null>(null)
   const [recentApplications, setRecentApplications] = useState<Application[]>([])
@@ -66,68 +64,83 @@ export default function EmployerDashboard() {
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
+    if (!user) return
+
+    let isMounted = true
+    const supabase = getSupabase()
+
     const loadDashboard = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      const user = session?.user
+      try {
+        // Load profile
+        const { data: profileData } = await supabase
+          .from('employer_profiles')
+          .select('venue_name, logo_url, category, area, email, phone, instagram_url, created_at')
+          .eq('id', user.id)
+          .maybeSingle()
 
-      if (!user) {
-        router.push('/?login=required')
-        return
+        if (!isMounted) return
+
+        if (profileData) {
+          setProfile(profileData)
+        }
+
+        // Load applications
+        const { data: applicationsData } = await supabase
+          .from('applications')
+          .select(`
+            id,
+            status,
+            applied_at,
+            student:student_profiles(id, first_name, last_name, photo_url, college),
+            gig:gigs(id, title)
+          `)
+          .eq('employer_id', user.id)
+          .order('applied_at', { ascending: false })
+          .limit(10)
+
+        if (!isMounted) return
+
+        if (applicationsData && applicationsData.length > 0) {
+          // Fetch skills for each student
+          const applicationsWithSkills = await Promise.all(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            applicationsData.map(async (app: any) => {
+              if (!app.student?.id) return { ...app, skills: [] }
+              const { data: skillsData } = await supabase
+                .from('student_skills')
+                .select('skill_name')
+                .eq('student_id', app.student.id)
+                .limit(6)
+
+              return {
+                ...app,
+                skills: skillsData || [],
+              }
+            })
+          )
+
+          if (isMounted) {
+            setRecentApplications(applicationsWithSkills)
+            setStats({
+              totalApplications: applicationsData.length,
+            })
+          }
+        }
+      } catch (error) {
+        console.error('Employer dashboard error:', error)
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
+        }
       }
-
-      // Load employer profile
-      const { data: profileData } = await supabase
-        .from('employer_profiles')
-        .select('venue_name, logo_url, category, area, email, phone, instagram_url, created_at')
-        .eq('id', user.id)
-        .single()
-
-      if (profileData) {
-        setProfile(profileData)
-      }
-
-      // Load recent applications with student skills
-      const { data: applicationsData } = await supabase
-        .from('applications')
-        .select(`
-          id,
-          status,
-          applied_at,
-          student:student_profiles(id, first_name, last_name, photo_url, college),
-          gig:gigs(id, title)
-        `)
-        .eq('employer_id', user.id)
-        .order('applied_at', { ascending: false })
-        .limit(10)
-
-      if (applicationsData) {
-        // Fetch skills for each student
-        const applicationsWithSkills = await Promise.all(
-          applicationsData.map(async (app: any) => {
-            const { data: skillsData } = await supabase
-              .from('student_skills')
-              .select('skill_name')
-              .eq('student_id', app.student?.id)
-              .limit(6)
-
-            return {
-              ...app,
-              skills: skillsData || [],
-            }
-          })
-        )
-
-        setRecentApplications(applicationsWithSkills)
-        setStats({
-          totalApplications: applicationsData.length,
-        })
-      }
-
-      setIsLoading(false)
     }
 
     loadDashboard()
-  }, [supabase, router])
+
+    return () => {
+      isMounted = false
+    }
+  }, [user])
 
   const getInstagramHandle = (url: string | null) => {
     if (!url) return null
