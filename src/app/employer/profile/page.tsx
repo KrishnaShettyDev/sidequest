@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { EmployerLayout } from '@/components/employer/EmployerLayout'
 import { Button } from '@/components/ui/button'
@@ -27,11 +26,10 @@ import {
 } from 'lucide-react'
 import { CATEGORIES, ALL_AREAS } from '@/lib/constants'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
+import { cn, sanitizeInput, sanitizeUrl, isValidPhone } from '@/lib/utils'
 
 export default function EmployerProfilePage() {
-  const router = useRouter()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [userId, setUserId] = useState<string | null>(null)
@@ -56,17 +54,17 @@ export default function EmployerProfilePage() {
 
   useEffect(() => {
     const loadProfile = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      const user = session?.user
+      const { data: { user } } = await supabase.auth.getUser()
 
       if (!user) {
-        router.push('/?login=required')
+        setIsLoading(false)
         return
       }
 
       setUserId(user.id)
 
-      const { data: profile } = await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: profile } = await (supabase as any)
         .from('employer_profiles')
         .select('*')
         .eq('id', user.id)
@@ -74,19 +72,19 @@ export default function EmployerProfilePage() {
 
       if (profile) {
         setFormData({
-          venue_name: (profile.venue_name as string) || '',
-          category: (profile.category as string) || '',
-          description: (profile.description as string) || '',
-          email: (profile.email as string) || user.email || '',
-          phone: (profile.phone as string) || '',
-          address: (profile.address as string) || '',
-          area: (profile.area as string) || '',
-          city: (profile.city as string) || 'Hyderabad',
-          google_maps_url: (profile.google_maps_url as string) || '',
-          logo_url: (profile.logo_url as string) || '',
-          cover_photo_url: (profile.cover_photo_url as string) || '',
-          website_url: (profile.website_url as string) || '',
-          instagram_url: (profile.instagram_url as string) || '',
+          venue_name: profile.venue_name || '',
+          category: profile.category || '',
+          description: profile.description || '',
+          email: profile.email || user.email || '',
+          phone: profile.phone || '',
+          address: profile.address || '',
+          area: profile.area || '',
+          city: profile.city || 'Hyderabad',
+          google_maps_url: profile.google_maps_url || '',
+          logo_url: profile.logo_url || '',
+          cover_photo_url: profile.cover_photo_url || '',
+          website_url: profile.website_url || '',
+          instagram_url: profile.instagram_url || '',
         })
       }
 
@@ -94,7 +92,8 @@ export default function EmployerProfilePage() {
     }
 
     loadProfile()
-  }, [supabase, router])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -106,25 +105,38 @@ export default function EmployerProfilePage() {
       return
     }
 
+    // Validate phone number
+    if (!isValidPhone(formData.phone)) {
+      toast.error('Please enter a valid phone number')
+      return
+    }
+
+    if (!userId) {
+      toast.error('Please sign in to update your profile')
+      return
+    }
+
     setIsSaving(true)
 
     try {
-      const { error } = await supabase
+      // Sanitize all inputs before saving
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
         .from('employer_profiles')
         .update({
-          venue_name: formData.venue_name,
-          category: formData.category,
-          description: formData.description || null,
-          email: formData.email,
-          phone: formData.phone,
-          address: formData.address || null,
-          area: formData.area || null,
-          city: formData.city,
-          google_maps_url: formData.google_maps_url || null,
-          logo_url: formData.logo_url || null,
-          cover_photo_url: formData.cover_photo_url || null,
-          website_url: formData.website_url || null,
-          instagram_url: formData.instagram_url || null,
+          venue_name: sanitizeInput(formData.venue_name),
+          category: formData.category, // From predefined list, no need to sanitize
+          description: sanitizeInput(formData.description) || null,
+          email: sanitizeInput(formData.email),
+          phone: sanitizeInput(formData.phone),
+          address: sanitizeInput(formData.address) || null,
+          area: formData.area || null, // From predefined list
+          city: sanitizeInput(formData.city),
+          google_maps_url: sanitizeUrl(formData.google_maps_url) || null,
+          logo_url: sanitizeUrl(formData.logo_url) || null,
+          cover_photo_url: sanitizeUrl(formData.cover_photo_url) || null,
+          website_url: sanitizeUrl(formData.website_url) || null,
+          instagram_url: sanitizeUrl(formData.instagram_url) || null,
         })
         .eq('id', userId)
 
@@ -165,13 +177,13 @@ export default function EmployerProfilePage() {
               className={cn(
                 'flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors',
                 currentStep === 1
-                  ? 'bg-amber-100 text-amber-900'
+                  ? 'bg-muted text-foreground'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
               <span className={cn(
                 'flex items-center justify-center w-6 h-6 rounded-full text-xs',
-                currentStep >= 1 ? 'bg-amber-500 text-white' : 'bg-muted'
+                currentStep >= 1 ? 'bg-foreground text-background' : 'bg-muted'
               )}>
                 {currentStep > 1 ? <CheckCircle2 className="h-4 w-4" /> : '1'}
               </span>
@@ -183,13 +195,13 @@ export default function EmployerProfilePage() {
               className={cn(
                 'flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium transition-colors',
                 currentStep === 2
-                  ? 'bg-amber-100 text-amber-900'
+                  ? 'bg-muted text-foreground'
                   : 'text-muted-foreground hover:text-foreground'
               )}
             >
               <span className={cn(
                 'flex items-center justify-center w-6 h-6 rounded-full text-xs',
-                currentStep >= 2 ? 'bg-amber-500 text-white' : 'bg-muted'
+                currentStep >= 2 ? 'bg-foreground text-background' : 'bg-muted'
               )}>
                 2
               </span>

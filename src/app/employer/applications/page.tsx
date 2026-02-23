@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { EmployerLayout } from '@/components/employer/EmployerLayout'
 import { Button } from '@/components/ui/button'
@@ -38,7 +37,6 @@ import {
   Eye,
   MoreHorizontal,
   MessageSquare,
-  Calendar,
   GraduationCap,
   Phone,
   MapPin,
@@ -84,27 +82,32 @@ const STATUS_CONFIG = {
 }
 
 export default function EmployerApplicationsPage() {
-  const router = useRouter()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
 
   const [applications, setApplications] = useState<Application[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isUpdating, setIsUpdating] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null)
+  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
     const loadApplications = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      const user = session?.user
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
 
-      if (!user) {
-        router.push('/?login=required')
+      if (authError || !user) {
+        setIsLoading(false)
+        if (authError) {
+          toast.error('Authentication error. Please sign in again.')
+        }
         return
       }
 
+      setUserId(user.id)
+
       // Load all applications for this employer
-      const { data: applicationsData } = await supabase
+      const { data: applicationsData, error: fetchError } = await supabase
         .from('applications')
         .select(`
           id,
@@ -116,9 +119,16 @@ export default function EmployerApplicationsPage() {
         .eq('employer_id', user.id)
         .order('applied_at', { ascending: false })
 
+      if (fetchError) {
+        toast.error('Failed to load applications')
+        setIsLoading(false)
+        return
+      }
+
       if (applicationsData) {
         // Fetch skills for each student
         const applicationsWithSkills = await Promise.all(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           applicationsData.map(async (app: any) => {
             const { data: skillsData } = await supabase
               .from('student_skills')
@@ -139,24 +149,58 @@ export default function EmployerApplicationsPage() {
     }
 
     loadApplications()
-  }, [supabase, router])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const updateApplicationStatus = async (appId: string, newStatus: string) => {
-    const { error } = await supabase
-      .from('applications')
-      .update({ status: newStatus })
-      .eq('id', appId)
+    if (!userId) {
+      toast.error('Please sign in to update applications')
+      return
+    }
 
-    if (error) {
-      toast.error('Failed to update status')
-    } else {
+    // Verify the application belongs to this employer (client-side check)
+    const app = applications.find((a) => a.id === appId)
+    if (!app) {
+      toast.error('Application not found')
+      return
+    }
+
+    // Validate status value to prevent injection
+    const validStatuses = ['pending', 'viewed', 'shortlisted', 'accepted', 'rejected', 'expired']
+    if (!validStatuses.includes(newStatus)) {
+      toast.error('Invalid status')
+      return
+    }
+
+    setIsUpdating(true)
+
+    try {
+      // The RLS policy ensures only the employer can update their own applications
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (supabase as any)
+        .from('applications')
+        .update({ status: newStatus })
+        .eq('id', appId)
+        .eq('employer_id', userId) // Additional server-side ownership check
+
+      if (error) {
+        console.error('Error updating application:', error)
+        toast.error('Failed to update status')
+        return
+      }
+
       setApplications(
-        applications.map((app) =>
-          app.id === appId ? { ...app, status: newStatus } : app
+        applications.map((a) =>
+          a.id === appId ? { ...a, status: newStatus } : a
         )
       )
       toast.success(`Application ${newStatus}`)
       setSelectedApplication(null)
+    } catch (err) {
+      console.error('Unexpected error:', err)
+      toast.error('An unexpected error occurred')
+    } finally {
+      setIsUpdating(false)
     }
   }
 
@@ -196,85 +240,95 @@ export default function EmployerApplicationsPage() {
       <div className="bg-muted/30 min-h-full">
         <div className="container py-8 max-w-6xl">
           {/* Header */}
-          <div className="mb-6">
-            <h1 className="text-2xl font-bold">Student Applications</h1>
-            <p className="text-muted-foreground">
-              Manage and review applications from talented students eager to work at your venue.
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold mb-1">Student Applications</h1>
+            <p className="text-sm text-muted-foreground">
+              Manage and review applications from talented students
             </p>
           </div>
 
           {/* Stats Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-            <Card className="bg-blue-50 border-blue-200">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
+            <Card>
               <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-blue-600 font-medium uppercase">Total</p>
-                    <p className="text-2xl font-bold text-blue-700">{stats.total}</p>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                    <FileText className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <FileText className="h-8 w-8 text-blue-400" />
+                  <div>
+                    <p className="text-2xl font-bold">{stats.total}</p>
+                    <p className="text-xs text-muted-foreground">Total</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-amber-50 border-amber-200">
+            <Card>
               <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-amber-600 font-medium uppercase">Applied</p>
-                    <p className="text-2xl font-bold text-amber-700">{stats.pending}</p>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                    <Clock className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <Clock className="h-8 w-8 text-amber-400" />
+                  <div>
+                    <p className="text-2xl font-bold">{stats.pending}</p>
+                    <p className="text-xs text-muted-foreground">Applied</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-purple-50 border-purple-200">
+            <Card>
               <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-purple-600 font-medium uppercase">Shortlisted</p>
-                    <p className="text-2xl font-bold text-purple-700">{stats.shortlisted}</p>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                    <Star className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <Star className="h-8 w-8 text-purple-400" />
+                  <div>
+                    <p className="text-2xl font-bold">{stats.shortlisted}</p>
+                    <p className="text-xs text-muted-foreground">Shortlisted</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-green-50 border-green-200">
+            <Card>
               <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-green-600 font-medium uppercase">Accepted</p>
-                    <p className="text-2xl font-bold text-green-700">{stats.accepted}</p>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                    <CheckCircle2 className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <CheckCircle2 className="h-8 w-8 text-green-400" />
+                  <div>
+                    <p className="text-2xl font-bold">{stats.accepted}</p>
+                    <p className="text-xs text-muted-foreground">Accepted</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
-            <Card className="bg-red-50 border-red-200">
+            <Card>
               <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-xs text-red-600 font-medium uppercase">Rejected</p>
-                    <p className="text-2xl font-bold text-red-700">{stats.rejected}</p>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-muted">
+                    <XCircle className="h-5 w-5 text-muted-foreground" />
                   </div>
-                  <XCircle className="h-8 w-8 text-red-400" />
+                  <div>
+                    <p className="text-2xl font-bold">{stats.rejected}</p>
+                    <p className="text-xs text-muted-foreground">Rejected</p>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           </div>
 
           {/* Filters */}
-          <div className="flex flex-col sm:flex-row gap-4 mb-6">
-            <div className="relative flex-1">
+          <div className="flex flex-col sm:flex-row gap-3 mb-6">
+            <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Search students..."
+                placeholder="Search by name or gig..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
+                className="pl-10 h-10"
               />
             </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-full sm:w-48">
+              <SelectTrigger className="w-full sm:w-44 h-10">
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>
@@ -290,96 +344,97 @@ export default function EmployerApplicationsPage() {
 
           {/* Applications Table */}
           {filteredApplications.length > 0 ? (
-            <Card>
+            <Card className="overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full">
-                  <thead className="bg-muted/50 border-b">
+                  <thead className="bg-muted/40">
                     <tr>
-                      <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">
+                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         Student
                       </th>
-                      <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">
+                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider hidden md:table-cell">
                         Skills
                       </th>
-                      <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">
+                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         Applied For
                       </th>
-                      <th className="text-left px-4 py-3 text-sm font-medium text-muted-foreground">
+                      <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         Status
                       </th>
-                      <th className="text-right px-4 py-3 text-sm font-medium text-muted-foreground">
+                      <th className="text-right px-5 py-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y">
+                  <tbody className="divide-y divide-border">
                     {filteredApplications.map((app) => {
                       const statusConfig = STATUS_CONFIG[app.status as keyof typeof STATUS_CONFIG] ||
                         STATUS_CONFIG.pending
 
                       return (
-                        <tr key={app.id} className="hover:bg-muted/30">
-                          <td className="px-4 py-4">
+                        <tr key={app.id} className="hover:bg-muted/30 transition-colors">
+                          <td className="px-5 py-4">
                             <div className="flex items-center gap-3">
-                              <Avatar className="h-10 w-10 border">
+                              <Avatar className="h-9 w-9">
                                 <AvatarImage src={app.student?.photo_url || undefined} />
-                                <AvatarFallback className="bg-primary/10 text-primary">
+                                <AvatarFallback className="bg-primary/10 text-primary text-sm">
                                   {app.student?.first_name?.[0]?.toUpperCase() || 'S'}
                                 </AvatarFallback>
                               </Avatar>
-                              <div>
-                                <p className="font-medium">
+                              <div className="min-w-0">
+                                <p className="font-medium text-sm truncate">
                                   {app.student?.first_name} {app.student?.last_name}
                                 </p>
-                                <p className="text-sm text-muted-foreground">
+                                <p className="text-xs text-muted-foreground truncate">
                                   {app.student?.college}
                                 </p>
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-4">
-                            <div className="flex flex-wrap gap-1 max-w-xs">
+                          <td className="px-5 py-4 hidden md:table-cell">
+                            <div className="flex flex-wrap gap-1.5">
                               {app.skills?.slice(0, 2).map((skill, idx) => (
                                 <Badge
                                   key={idx}
                                   variant="secondary"
-                                  className="text-xs font-normal"
+                                  className="text-xs font-normal px-2 py-0.5"
                                 >
                                   {skill.skill_name}
                                 </Badge>
                               ))}
                               {app.skills && app.skills.length > 2 && (
-                                <Badge variant="outline" className="text-xs">
+                                <Badge variant="outline" className="text-xs px-2 py-0.5">
                                   +{app.skills.length - 2}
                                 </Badge>
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="px-5 py-4">
                             <div>
-                              <p className="text-sm font-medium">{app.gig?.title}</p>
+                              <p className="text-sm font-medium truncate max-w-[180px]">{app.gig?.title}</p>
                               <p className="text-xs text-muted-foreground">
                                 {format(new Date(app.applied_at), 'MMM d, yyyy')}
                               </p>
                             </div>
                           </td>
-                          <td className="px-4 py-4">
-                            <Badge className={cn('font-normal', statusConfig.color)}>
+                          <td className="px-5 py-4">
+                            <Badge className={cn('font-normal text-xs', statusConfig.color)}>
                               {statusConfig.label}
                             </Badge>
                           </td>
-                          <td className="px-4 py-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
+                          <td className="px-5 py-4 text-right">
+                            <div className="flex items-center justify-end gap-1">
                               <Button
                                 variant="ghost"
-                                size="sm"
+                                size="icon"
+                                className="h-8 w-8"
                                 onClick={() => setSelectedApplication(app)}
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm">
+                                  <Button variant="ghost" size="icon" className="h-8 w-8" disabled={isUpdating}>
                                     <MoreHorizontal className="h-4 w-4" />
                                   </Button>
                                 </DropdownMenuTrigger>
@@ -415,18 +470,20 @@ export default function EmployerApplicationsPage() {
               </div>
 
               {/* Pagination */}
-              <div className="border-t px-4 py-3 flex items-center justify-between">
+              <div className="border-t bg-muted/20 px-5 py-3 flex items-center justify-between">
                 <p className="text-sm text-muted-foreground">
-                  1-{filteredApplications.length} of {filteredApplications.length}
+                  Showing {filteredApplications.length} of {applications.length} applications
                 </p>
               </div>
             </Card>
           ) : (
-            <Card>
-              <CardContent className="py-16 text-center">
-                <Users className="mx-auto h-12 w-12 text-muted-foreground/50 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No applications found</h3>
-                <p className="text-muted-foreground">
+            <Card className="border-dashed">
+              <CardContent className="py-20 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted mx-auto mb-4">
+                  <Users className="h-7 w-7 text-muted-foreground" />
+                </div>
+                <h3 className="text-lg font-semibold mb-1">No applications found</h3>
+                <p className="text-sm text-muted-foreground max-w-sm mx-auto">
                   {searchQuery || statusFilter !== 'all'
                     ? 'Try adjusting your search or filters'
                     : 'Applications will appear here once students apply to your gigs'}

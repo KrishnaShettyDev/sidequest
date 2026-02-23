@@ -66,7 +66,7 @@ interface Gig {
 export default function GigDetailPage() {
   const router = useRouter()
   const params = useParams()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
 
   const [gig, setGig] = useState<Gig | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -74,76 +74,103 @@ export default function GigDetailPage() {
   const [hasApplied, setHasApplied] = useState(false)
   const [isApplying, setIsApplying] = useState(false)
   const [showApplyDialog, setShowApplyDialog] = useState(false)
-  const [profileComplete, setProfileComplete] = useState(true)
+  const [profileComplete, setProfileComplete] = useState(false)
+  const [hasStudentProfile, setHasStudentProfile] = useState(false)
 
   useEffect(() => {
+    let isMounted = true
+
     const loadData = async () => {
-      // Load gig
-      const { data: gigData, error } = await supabase
-        .from('gigs')
-        .select(`
-          *,
-          employer:employer_profiles(
-            venue_name,
-            logo_url,
-            cover_photo_url,
-            description,
-            website_url,
-            instagram_url,
-            google_maps_url
-          )
-        `)
-        .eq('id', params.id)
-        .single() as { data: Gig | null, error: Error | null }
+      try {
+        // Load gig first
+        const { data: gigData, error: gigError } = await supabase
+          .from('gigs')
+          .select(`
+            *,
+            employer:employer_profiles(
+              venue_name,
+              logo_url,
+              cover_photo_url,
+              description,
+              website_url,
+              instagram_url,
+              google_maps_url
+            )
+          `)
+          .eq('id', params.id)
+          .single()
 
-      if (error || !gigData) {
-        console.error('Error loading gig:', error)
-        router.push('/gigs')
-        return
-      }
+        if (!isMounted) return
 
-      setGig(gigData)
+        if (gigError || !gigData) {
+          console.error('Error loading gig:', gigError)
+          router.push('/gigs')
+          return
+        }
 
-      // Check auth and application status
-      const { data: { session } } = await supabase.auth.getSession(); const authUser = session?.user
-      if (authUser) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', authUser.id)
-          .single() as { data: { role: string } | null }
+        setGig(gigData as Gig)
 
-        setUser({ id: authUser.id, role: profile?.role })
+        // Check session
+        const { data: { session } } = await supabase.auth.getSession()
+        const authUser = session?.user
 
-        // Check if already applied
-        if (profile?.role === 'student') {
-          const { data: application } = await supabase
-            .from('applications')
-            .select('id')
-            .eq('gig_id', params.id)
-            .eq('student_id', authUser.id)
-            .single() as { data: { id: string } | null }
-
-          setHasApplied(!!application)
-
-          // Check profile completion
-          const { data: studentProfile } = await supabase
-            .from('student_profiles')
-            .select('first_name, phone, college')
+        if (authUser && isMounted) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
             .eq('id', authUser.id)
-            .single() as { data: { first_name: string; phone: string; college: string } | null }
+            .maybeSingle()
 
-          setProfileComplete(
-            !!(studentProfile?.first_name && studentProfile?.phone && studentProfile?.college)
-          )
+          if (!isMounted) return
+          setUser({ id: authUser.id, role: (profile as { role: string } | null)?.role })
+
+          // Check student-specific data
+          if ((profile as { role: string } | null)?.role === 'student') {
+            const { data: studentProfile } = await supabase
+              .from('student_profiles')
+              .select('id, first_name, phone, college')
+              .eq('id', authUser.id)
+              .maybeSingle()
+
+            if (!isMounted) return
+
+            if (!studentProfile) {
+              setHasStudentProfile(false)
+              setProfileComplete(false)
+            } else {
+              setHasStudentProfile(true)
+              const sp = studentProfile as { first_name: string; phone: string; college: string }
+              setProfileComplete(!!(sp.first_name && sp.phone && sp.college))
+
+              // Check if already applied
+              const { data: application } = await supabase
+                .from('applications')
+                .select('id')
+                .eq('gig_id', params.id)
+                .eq('student_id', authUser.id)
+                .maybeSingle()
+
+              if (isMounted) {
+                setHasApplied(!!application)
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Gig detail error:', error)
+      } finally {
+        if (isMounted) {
+          setIsLoading(false)
         }
       }
-
-      setIsLoading(false)
     }
 
     loadData()
-  }, [supabase, params.id, router])
+
+    return () => {
+      isMounted = false
+    }
+  }, [params.id, supabase, router])
 
   const handleApply = async () => {
     if (!user) {
@@ -151,15 +178,22 @@ export default function GigDetailPage() {
       return
     }
 
-    if (!profileComplete) {
+    if (!hasStudentProfile) {
       toast.error('Please complete your profile first')
       router.push('/student/onboarding/about')
+      return
+    }
+
+    if (!profileComplete) {
+      toast.error('Please complete your profile first')
+      router.push('/student/profile')
       return
     }
 
     setIsApplying(true)
 
     try {
+      // Insert application - conversation is created automatically by database trigger
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase as any)
         .from('applications')
@@ -170,16 +204,10 @@ export default function GigDetailPage() {
           status: 'pending',
         })
 
-      if (error) throw error
-
-      // Create conversation
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase as any)
-        .from('conversations')
-        .insert({
-          student_id: user.id,
-          employer_id: gig?.employer_id,
-        })
+      if (error) {
+        console.error('Application insert error:', error)
+        throw error
+      }
 
       setHasApplied(true)
       setShowApplyDialog(false)
@@ -402,6 +430,17 @@ export default function GigDetailPage() {
                         <CheckCircle2 className="mr-2 h-4 w-4" />
                         Applied
                       </Button>
+                    ) : !hasStudentProfile || !profileComplete ? (
+                      <Button
+                        className="w-full"
+                        size="lg"
+                        variant="secondary"
+                        asChild
+                      >
+                        <Link href="/student/onboarding/about">
+                          Complete Profile to Apply
+                        </Link>
+                      </Button>
                     ) : (
                       <Button
                         className="w-full"
@@ -421,11 +460,6 @@ export default function GigDetailPage() {
                     </Button>
                   )}
 
-                  {user?.role === 'student' && !profileComplete && (
-                    <p className="mt-3 text-sm text-center text-amber-600">
-                      Complete your profile to apply
-                    </p>
-                  )}
                 </CardContent>
               </Card>
 

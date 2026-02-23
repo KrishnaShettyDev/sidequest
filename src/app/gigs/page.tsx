@@ -28,10 +28,10 @@ interface Gig {
 }
 
 export default function GigsPage() {
-  const supabase = createClient()
   const [gigs, setGigs] = useState<Gig[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [user, setUser] = useState<{ id: string; role?: string } | null>(null)
+  const [user] = useState<{ id: string; role?: string } | null>(null)
+  const [supabase] = useState(() => createClient())
 
   // Filter state
   const [search, setSearch] = useState('')
@@ -42,38 +42,21 @@ export default function GigsPage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Check auth status
-        const { data: { session } } = await supabase.auth.getSession(); const authUser = session?.user
-        if (authUser) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', authUser.id)
-            .single() as { data: { role: string } | null }
-
-          setUser({ id: authUser.id, role: profile?.role })
-        }
-
-        // Load gigs with employer info
-        const { data: gigsData, error } = await supabase
+        const { data, error } = await supabase
           .from('gigs')
-          .select(`
-            *,
-            employer:employer_profiles(venue_name, logo_url)
-          `)
+          .select('*, employer:employer_profiles(venue_name, logo_url)')
           .eq('is_active', true)
-          .order('created_at', { ascending: false }) as { data: Gig[] | null, error: Error | null }
+          .order('created_at', { ascending: false })
 
         if (error) {
-          console.error('Error loading gigs:', error)
+          console.error('Gigs error:', error)
         } else {
-          setGigs(gigsData || [])
+          setGigs(data as Gig[] || [])
         }
-      } catch (error) {
-        console.error('Gigs page error:', error)
-      } finally {
-        setIsLoading(false)
+      } catch (err) {
+        console.error('Gigs catch error:', err)
       }
+      setIsLoading(false)
     }
 
     loadData()

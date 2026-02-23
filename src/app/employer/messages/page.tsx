@@ -1,12 +1,11 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { EmployerLayout } from '@/components/employer/EmployerLayout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card } from '@/components/ui/card'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -18,7 +17,7 @@ import {
   Search,
   User,
 } from 'lucide-react'
-import { formatDistanceToNow, format } from 'date-fns'
+import { format } from 'date-fns'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 
@@ -50,8 +49,7 @@ interface Message {
 }
 
 export default function EmployerMessagesPage() {
-  const router = useRouter()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const [userId, setUserId] = useState<string | null>(null)
@@ -65,11 +63,10 @@ export default function EmployerMessagesPage() {
 
   useEffect(() => {
     const loadConversations = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      const user = session?.user
+      const { data: { user } } = await supabase.auth.getUser()
 
       if (!user) {
-        router.push('/?login=required')
+        setIsLoading(false)
         return
       }
 
@@ -90,6 +87,7 @@ export default function EmployerMessagesPage() {
       if (convos) {
         // Get last message for each conversation
         const convosWithMessages = await Promise.all(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           convos.map(async (convo: any) => {
             const { data: lastMsg } = await supabase
               .from('messages')
@@ -109,7 +107,8 @@ export default function EmployerMessagesPage() {
     }
 
     loadConversations()
-  }, [supabase, router])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!selectedConversation) return
@@ -125,7 +124,8 @@ export default function EmployerMessagesPage() {
         setMessages(data)
 
         // Mark messages as read
-        await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any)
           .from('messages')
           .update({ is_read: true })
           .eq('conversation_id', selectedConversation.id)
@@ -168,7 +168,8 @@ export default function EmployerMessagesPage() {
 
     setIsSending(true)
 
-    const { error } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
       .from('messages')
       .insert({
         conversation_id: selectedConversation.id,
@@ -180,7 +181,8 @@ export default function EmployerMessagesPage() {
     if (!error) {
       setNewMessage('')
       // Update last_message_at
-      await supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any)
         .from('conversations')
         .update({ last_message_at: new Date().toISOString() })
         .eq('id', selectedConversation.id)
@@ -410,7 +412,6 @@ export default function EmployerMessagesPage() {
                       <Button
                         type="submit"
                         disabled={isSending || !newMessage.trim()}
-                        className="bg-amber-500 hover:bg-amber-600"
                       >
                         <Send className="h-4 w-4" />
                       </Button>

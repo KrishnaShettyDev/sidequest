@@ -86,10 +86,10 @@ export default function ApplicantsPage() {
 
   useEffect(() => {
     const loadData = async () => {
-      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user
+      const { data: { user } } = await supabase.auth.getUser()
 
       if (!user) {
-        router.push('/?login=required')
+        setIsLoading(false)
         return
       }
 
@@ -150,7 +150,8 @@ export default function ApplicantsPage() {
     }
 
     loadData()
-  }, [supabase, router, params.id])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params.id])
 
   const updateStatus = async (applicationId: string, newStatus: string) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

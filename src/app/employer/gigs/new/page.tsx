@@ -21,11 +21,11 @@ import { Loader2, ArrowLeft, Plus, X } from 'lucide-react'
 import { CATEGORIES, ALL_AREAS, SCHEDULE_TYPES, PAY_TYPES, ALL_SKILLS, COMMON_PERKS } from '@/lib/constants'
 import { toast } from 'sonner'
 import Link from 'next/link'
-import { cn } from '@/lib/utils'
+import { cn, sanitizeInput } from '@/lib/utils'
 
 export default function NewGigPage() {
   const router = useRouter()
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
 
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -52,10 +52,10 @@ export default function NewGigPage() {
 
   useEffect(() => {
     const loadData = async () => {
-      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user
+      const { data: { user } } = await supabase.auth.getUser()
 
       if (!user) {
-        router.push('/?login=required')
+        setIsLoading(false)
         return
       }
 
@@ -81,7 +81,8 @@ export default function NewGigPage() {
     }
 
     loadData()
-  }, [supabase, router])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
@@ -130,28 +131,48 @@ export default function NewGigPage() {
       return
     }
 
+    if (!userId) {
+      toast.error('Please sign in to post a gig')
+      return
+    }
+
+    // Validate pay values
+    const payMin = parseInt(formData.pay_min)
+    const payMax = formData.pay_max ? parseInt(formData.pay_max) : payMin
+
+    if (isNaN(payMin) || payMin < 0) {
+      toast.error('Please enter a valid minimum pay')
+      return
+    }
+
+    if (payMax < payMin) {
+      toast.error('Maximum pay cannot be less than minimum pay')
+      return
+    }
+
     setIsSaving(true)
 
     try {
+      // Sanitize all text inputs
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { error } = await (supabase as any)
         .from('gigs')
         .insert({
           employer_id: userId,
-          title: formData.title,
-          description: formData.description,
-          category: formData.category,
-          area: formData.area,
-          address: formData.address || null,
-          pay_min: parseInt(formData.pay_min),
-          pay_max: formData.pay_max ? parseInt(formData.pay_max) : parseInt(formData.pay_min),
-          pay_type: formData.pay_type,
-          schedule_type: formData.schedule_type || null,
-          schedule_details: formData.schedule_details || null,
-          duration: formData.duration || null,
-          required_skills: requiredSkills.length > 0 ? requiredSkills : null,
-          requirements: requirements.length > 0 ? requirements : null,
-          perks: perks.length > 0 ? perks : null,
+          title: sanitizeInput(formData.title),
+          description: sanitizeInput(formData.description),
+          category: formData.category, // From predefined list
+          area: formData.area, // From predefined list
+          address: sanitizeInput(formData.address) || null,
+          pay_min: payMin,
+          pay_max: payMax,
+          pay_type: formData.pay_type, // From predefined list
+          schedule_type: formData.schedule_type || null, // From predefined list
+          schedule_details: sanitizeInput(formData.schedule_details) || null,
+          duration: sanitizeInput(formData.duration) || null,
+          required_skills: requiredSkills.length > 0 ? requiredSkills : null, // From predefined list
+          requirements: requirements.length > 0 ? requirements.map(r => sanitizeInput(r)) : null,
+          perks: perks.length > 0 ? perks : null, // From predefined list
           is_active: true,
         })
 

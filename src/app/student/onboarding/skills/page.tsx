@@ -76,10 +76,10 @@ export default function SkillsPage() {
 
   useEffect(() => {
     const loadSkills = async () => {
-      const { data: { session } } = await supabase.auth.getSession(); const user = session?.user
+      const { data: { user } } = await supabase.auth.getUser()
 
       if (!user) {
-        router.push('/?login=required')
+        setIsLoading(false)
         return
       }
 
@@ -99,7 +99,8 @@ export default function SkillsPage() {
     }
 
     loadSkills()
-  }, [supabase, router])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleAddSkill = () => {
     setEditingSkill(null)

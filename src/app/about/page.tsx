@@ -23,7 +23,7 @@ export default function AboutPage() {
               </h1>
               <p className="text-body-lg text-muted-foreground mb-10 max-w-2xl mx-auto">
                 Join Sidequest, where every gig is an opportunity to learn, earn, and grow.
-                We're building a community of ambitious students who work at places they love
+                We&apos;re building a community of ambitious students who work at places they love
                 while building real-world experience.
               </p>
               <Link href="/?signup=true" className="btn-primary">
@@ -51,7 +51,7 @@ export default function AboutPage() {
                   Reimagining How Students <span className="italic">Work</span>
                 </h2>
                 <p className="text-body text-muted-foreground leading-relaxed">
-                  We imagine a world where college students don't have to choose between their studies
+                  We imagine a world where college students don&apos;t have to choose between their studies
                   and gaining work experience. At Sidequest, our vision is to build a movement of
                   ambitious young minds who work at aspirational venues—cafes where ideas brew,
                   bookstores where stories live, gyms where energy flows.
@@ -137,7 +137,7 @@ export default function AboutPage() {
                 <p className="text-body text-muted-foreground leading-relaxed">
                   We exist to bridge the gap between education and employment—empowering students
                   to gain real-world experience without sacrificing their academic goals. Whether
-                  you're serving coffee at a hip cafe, helping at a fitness studio, or managing
+                  you&apos;re serving coffee at a hip cafe, helping at a fitness studio, or managing
                   social media for a bookstore—our goal is to make it easy for you to use your
                   skills, earn money, and discover what you love.
                 </p>
@@ -203,14 +203,14 @@ export default function AboutPage() {
               {/* The Problem */}
               <div>
                 <h2 className="text-subheading mb-6">
-                  What's <span className="italic">Happening</span>
+                  What&apos;s <span className="italic">Happening</span>
                 </h2>
                 <ul className="space-y-4">
                   <li className="flex gap-3">
                     <span className="h-2 w-2 rounded-full bg-foreground mt-2 flex-shrink-0" />
                     <p className="text-body text-muted-foreground">
                       College students struggle to find part-time work that respects their
-                      academic schedule and doesn't require full-time commitment.
+                      academic schedule and doesn&apos;t require full-time commitment.
                     </p>
                   </li>
                   <li className="flex gap-3">
@@ -240,7 +240,7 @@ export default function AboutPage() {
               {/* The Solution */}
               <div>
                 <h2 className="text-subheading mb-6">
-                  How We're <span className="italic">Helping</span>
+                  How We&apos;re <span className="italic">Helping</span>
                 </h2>
                 <ul className="space-y-4">
                   <li className="flex gap-3">
@@ -285,8 +285,8 @@ export default function AboutPage() {
                 Join <span className="italic">Sidequest</span>
               </h2>
               <p className="text-body-lg text-muted-foreground mb-10">
-                Where every gig is a chance to learn, earn, and grow. We're creating a
-                community of ambitious students who work at places they love—one side quest at a time.
+                Where every gig is a chance to learn, earn, and grow. We&apos;re creating a
+                community of ambitious students who work at places they love—one sidequest at a time.
               </p>
               <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                 <Link href="/?signup=true" className="btn-primary">
